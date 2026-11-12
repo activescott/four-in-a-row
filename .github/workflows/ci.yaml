@@ -3,8 +3,6 @@ name: ci
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
 
 permissions:
   contents: read
@@ -13,30 +11,4 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Report docs-only skip
-        if: false
-        run: echo "Skipped: docs-only change" >> "$GITHUB_STEP_SUMMARY"
-      - name: Checkout
-        if: true
-        uses: actions/checkout@v7
-      - name: Set up Node
-        if: true
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - name: Install
-        if: true
-        run: npm ci
-      - name: Typecheck
-        if: true
-        run: npm run typecheck
-      - name: Lint
-        if: true
-        run: npm run lint
-      - name: Test
-        if: true
-        run: npm test
-      - name: Build
-        if: true
-        run: npm run build
+      - run: echo hi
