@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id         String     @id @default(uuid())
+  email      String     @unique
+  createdAt  DateTime   @default(now()) @map("created_at")
+  identities Identity[]
+
+  @@map("users")
+}
+
+// Exactly as @activescott/auth-store-prisma documents it.
+model Identity {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  provider   String // "email" | "passkey"
+  identifier String // email address or WebAuthn credential ID
+  metadata   Json? // providerState, opaque to the app
+  createdAt  DateTime  @default(now()) @map("created_at")
+  verifiedAt DateTime? @map("verified_at")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, identifier])
+  @@map("identities")
+}
+
+enum GameStatus {
+  INVITED
+  ACTIVE
+  WON
+  DRAW
+}
+
+model Game {
+  id              String     @id @default(uuid())
+  playerOneId     String     @map("player_one_id") // moves first
+  playerTwoId     String?    @map("player_two_id") // null until the invite is accepted
+  status          GameStatus
+  nextPlayerId    String?    @map("next_player_id") // null once finished
+  winnerId        String?    @map("winner_id")
+  moveCount       Int        @default(0) @map("move_count") // optimistic concurrency
+  playerOneSeenAt DateTime?  @map("player_one_seen_at") // presence for R6
+  playerTwoSeenAt DateTime?  @map("player_two_seen_at")
+  rematchOfId     String?    @map("rematch_of_id")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  finishedAt      DateTime?  @map("finished_at")
+  moves           Move[]
+  invite          Invite?
+
+  @@index([playerOneId])
+  @@index([playerTwoId])
+  @@map("games")
+}
+
+model Move {
+  id                 String    @id @default(uuid())
+  gameId             String    @map("game_id")
+  number             Int // 1..42
+  playerId           String    @map("player_id")
+  column             Int // 0..6
+  row                Int // 0..5, 0 = bottom
+  createdAt          DateTime  @default(now()) @map("created_at")
+  turnEmailClaimedAt DateTime? @map("turn_email_claimed_at") // R6 at-most-once
+  game               Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, number])
+  @@map("moves")
+}
+
+model Invite {
+  id         String    @id @default(uuid())
+  gameId     String    @unique @map("game_id")
+  inviterId  String    @map("inviter_id")
+  email      String
+  acceptedAt DateTime? @map("accepted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  game       Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@map("invites")
+}
