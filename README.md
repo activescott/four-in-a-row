@@ -5,6 +5,15 @@ A browser game of four-in-a-row for two players. It runs in Safari on iPhone and
 - Requirements: [#1](https://github.com/activescott/four-in-a-row/issues/1)
 - Design: [#2](https://github.com/activescott/four-in-a-row/issues/2)
 
-This repository holds only setup files so far. The app is built by pull requests from here on.
+## Development
+
+```sh
+npm ci
+npx prisma generate   # writes the Prisma client to app/generated/
+npm run dev           # PGlite database in ./pglite-data, migrated at startup
+npm test              # each test file gets a fresh in-memory PGlite database
+```
+
+With `DATABASE_URL` set, the app uses Postgres instead of PGlite. Health checks are at `/healthz` (liveness) and `/readyz` (readiness, with `db.size` in bytes).
 
 Commits and pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/), checked by commitlint with `@commitlint/config-conventional`.
