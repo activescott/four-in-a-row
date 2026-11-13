@@ -14,6 +14,6 @@ npm run dev           # PGlite database in ./pglite-data, migrated at startup
 npm test              # each test file gets a fresh in-memory PGlite database
 ```
 
-With `DATABASE_URL` set, the app uses Postgres instead of PGlite. Health checks are at `/healthz` (liveness) and `/readyz` (readiness, with `db.size` in bytes).
+With `DATABASE_URL` set, the app uses Postgres instead of PGlite. Health checks are at `/ops/health/liveness` (liveness) and `/ops/health/readiness` (readiness, with `db.size` in bytes).
 
 Commits and pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/), checked by commitlint with `@commitlint/config-conventional`.
