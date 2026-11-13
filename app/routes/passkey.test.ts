@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test, vi } from "vitest";
+import { afterAll, expect, test, vi } from "vitest";
 import type { PrismaClient } from "../generated/prisma/client";
 import { createPgliteDb } from "../pglite.server";
 import { CookieJar } from "../test/cookie-jar";
@@ -8,12 +8,10 @@ import { SoftAuthenticator } from "../test/soft-authenticator";
 const getDb = vi.hoisted(() => vi.fn<() => Promise<PrismaClient>>());
 vi.mock("../db.server", () => ({ getDb }));
 
-let db: PrismaClient;
-
-beforeAll(async () => {
-  db = await createPgliteDb();
-  getDb.mockResolvedValue(db);
-});
+// The auth module reads the database when it first loads, so connect it
+// before the route modules are imported below.
+const db = await createPgliteDb();
+getDb.mockResolvedValue(db);
 
 afterAll(async () => {
   await db.$disconnect();
