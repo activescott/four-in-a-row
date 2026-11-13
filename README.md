@@ -24,7 +24,7 @@ Sign-in uses [`@activescott/auth`](https://github.com/activescott/auth): an emai
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `JWT_SECRET`                                                      | Signs session cookies. Required in production; dev uses a random one per run.              |
 | `PASSKEY_CHALLENGE_SECRET`                                        | Signs passkey challenge cookies. Required in production.                                   |
-| `APP_URL`                                                         | Canonical URL in production, which passkeys are bound to.                                  |
+| `APP_URL`                                                         | Canonical URL that passkeys are bound to. Required in production.                          |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Outgoing mail. In dev without `SMTP_HOST`, the link is printed to the console.             |
 | `FROM_EMAIL`                                                      | Sender address.                                                                            |
 | `SIGNUP_EMAILS`                                                   | Addresses that may sign up without an invite, separated by commas or spaces.               |

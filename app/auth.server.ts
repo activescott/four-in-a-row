@@ -34,6 +34,12 @@ function secret(name: string) {
   return randomBytes(32).toString("base64url");
 }
 
+function required(name: string) {
+  const value = env[name];
+  if (!value) throw new Error(`${name} must be set in production`);
+  return value;
+}
+
 // Mail goes through SMTP_* from env. Dev without SMTP_HOST prints the link to
 // the console instead. Under E2E_TEST_MODE nothing is sent: the capture
 // transport records each email for /e2e/captured-email.
@@ -104,7 +110,7 @@ export const auth = new Auth({
     new PasskeyProvider({
       rpName: "Four in a Row",
       // Unset in dev and tests, so rpID and origin come from each request.
-      appUrl: production ? env.APP_URL : undefined,
+      appUrl: production ? required("APP_URL") : undefined,
       challengeSecret: production
         ? secret("PASSKEY_CHALLENGE_SECRET")
         : (env.PASSKEY_CHALLENGE_SECRET ?? jwtSecret),

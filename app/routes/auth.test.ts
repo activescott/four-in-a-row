@@ -124,15 +124,19 @@ async function signIn(email: string, redirectTo?: string) {
   return { jar, response };
 }
 
+// Not the default successRedirect (/profile), so a dropped redirectTo fails.
+const TARGET = "/games/abc";
+const OFF_SITE = ["https://evil.example", "//evil.example"];
+
 test("an allowed address signs in by email link end to end and lands on redirectTo", async () => {
   const loginData = await run(
     login.loader,
-    get("/login?redirectTo=%2Fprofile"),
+    get(`/login?redirectTo=${encodeURIComponent(TARGET)}`),
   );
-  expect(loginData).toMatchObject({ redirectTo: "/profile" });
+  expect(loginData).toMatchObject({ redirectTo: TARGET });
 
   const jar = new CookieJar();
-  const sent = await requestEmail(jar, "seed@example.com", "/profile");
+  const sent = await requestEmail(jar, "seed@example.com", TARGET);
   expect(sent.status).toBe(302);
   expect(new URL(sent.headers.get("location")!).searchParams.get("sent")).toBe(
     "1",
@@ -146,7 +150,7 @@ test("an allowed address signs in by email link end to end and lands on redirect
 
   const signedIn = await followMagicLink(jar, magicLink);
   expect(signedIn.status).toBe(302);
-  expect(signedIn.headers.get("location")).toBe("/profile");
+  expect(signedIn.headers.get("location")).toBe(TARGET);
 
   const page = await run(
     profile.loader,
@@ -161,6 +165,51 @@ test("an allowed address signs in by email link end to end and lands on redirect
     expect.objectContaining({ userId: user.id, provider: "email" }),
   );
 });
+
+test("the code form's action keeps redirectTo, as login.tsx builds it", async () => {
+  const email = await member("code-entry@example.com");
+  const jar = new CookieJar();
+  await requestEmail(jar, email, TARGET);
+  const { code } = await (await readCapturedEmail(email)).json();
+
+  const response = await auth(
+    formPost(
+      `/auth/email/verify?redirectTo=${encodeURIComponent(TARGET)}`,
+      { code },
+      { cookie: jar.header(), referer: "/login" },
+    ),
+  );
+
+  expect(response.status).toBe(302);
+  expect(response.headers.get("location")).toBe(TARGET);
+});
+
+test.each(OFF_SITE)(
+  "an off-site redirectTo %s is refused and sign-in lands on /profile",
+  async (target) => {
+    const loginData = await run(
+      login.loader,
+      get(`/login?redirectTo=${encodeURIComponent(target)}`),
+    );
+    expect(loginData).toMatchObject({ redirectTo: null });
+
+    const email = await member(
+      `off-site-${OFF_SITE.indexOf(target)}@example.com`,
+    );
+    const { jar, response } = await signIn(email, target);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/profile");
+
+    const again = (await run(
+      login.loader,
+      get(`/login?redirectTo=${encodeURIComponent(target)}`, {
+        cookie: jar.header(),
+      }),
+    )) as Response;
+    expect(again.status).toBe(302);
+    expect(again.headers.get("location")).toBe("/profile");
+  },
+);
 
 test("an address the gate does not allow is refused and no mail is sent", async () => {
   const jar = new CookieJar();
@@ -228,7 +277,7 @@ test("logout clears the session", async () => {
   jar.store(response);
 
   expect(response.status).toBe(302);
-  expect(response.headers.get("location")).toBe("/login");
+  expect(response.headers.get("location")).toBe("/");
   const after = (await run(
     profile.loader,
     get("/profile", { cookie: jar.header() }),
@@ -255,11 +304,13 @@ test("/login sends a signed-in user on to redirectTo", async () => {
 
   const response = (await run(
     login.loader,
-    get("/login?redirectTo=%2Fprofile", { cookie: jar.header() }),
+    get(`/login?redirectTo=${encodeURIComponent(TARGET)}`, {
+      cookie: jar.header(),
+    }),
   )) as Response;
 
   expect(response.status).toBe(302);
-  expect(response.headers.get("location")).toBe("/profile");
+  expect(response.headers.get("location")).toBe(TARGET);
 });
 
 test("/e2e/captured-email needs the shared secret even in test mode", async () => {
