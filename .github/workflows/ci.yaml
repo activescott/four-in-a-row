@@ -34,9 +34,8 @@ jobs:
       # to `migrate diff --from-migrations` with a shadow database at the second.
       - name: Check migration matches schema
         env:
-          DEBUG: "prisma*"
+          # The schema engine exits silently without a datasource; it doesn't connect.
+          DATABASE_URL: postgresql://unused@localhost/unused
         run: |
           npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script > "$RUNNER_TEMP/expected.sql"
-          echo "migrate diff exit: $?"
-          cat "$RUNNER_TEMP/expected.sql"
           diff -u "$RUNNER_TEMP/expected.sql" prisma/migrations/20261113000000_init/migration.sql
