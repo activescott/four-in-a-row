@@ -26,7 +26,7 @@ jobs:
       # to `migrate diff --from-migrations` with a shadow database at the second.
       - name: Check migration matches schema
         run: |
-          npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script > "$RUNNER_TEMP/expected.sql"
+          npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script --output "$RUNNER_TEMP/expected.sql"
           diff -u "$RUNNER_TEMP/expected.sql" prisma/migrations/20261113000000_init/migration.sql
       - name: Typecheck
         run: npm run typecheck
