@@ -1,5 +1,6 @@
 {
   "name": "four-in-a-row",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -8,7 +9,7 @@
   "scripts": {
     "dev": "PGLITE_DIR=pglite-data react-router dev",
     "build": "react-router build",
-    "start": "react-router-serve ./build/server/index.js",
+    "start": "node server.mjs",
     "typecheck": "react-router typegen && tsc",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
@@ -17,10 +18,12 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
+    "@react-router/express": "^8.5.1",
     "@react-router/node": "^8.5.1",
-    "@react-router/serve": "^8.5.1",
+    "express": "^5.3.0",
     "isbot": "^5.2.3",
     "pino": "^10.4.0",
+    "prisma": "^7.10.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router": "^8.5.1"
@@ -39,7 +42,6 @@
     "globals": "^17.14.0",
     "pglite-prisma-adapter": "^0.7.2",
     "prettier": "^3.10.1",
-    "prisma": "^7.10.1",
     "tailwindcss": "^4.3.5",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.2",
