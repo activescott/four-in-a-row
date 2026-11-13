@@ -148,7 +148,17 @@ describe("outcome", () => {
     expect(lastMove).toEqual({ column: 3, row: 3, player: 1 });
     const o = outcome(board, lastMove!);
     expect(o.status).toBe("win");
-    if (o.status === "win") expect(o.player).toBe(1);
+    if (o.status === "win") {
+      expect(o.player).toBe(1);
+      expect(o.cells).toEqual(
+        expect.arrayContaining([
+          { row: 0, column: 0 },
+          { row: 1, column: 1 },
+          { row: 2, column: 2 },
+          { row: 3, column: 3 },
+        ]),
+      );
+    }
   });
 
   it("detects a rising diagonal win with the last disc in the middle", () => {
@@ -220,8 +230,27 @@ describe("outcome", () => {
     expect(o.status).toBe("win");
   });
 
+  it("detects a horizontal win ending in the last column", () => {
+    const { board, lastMove } = play([3, 3, 4, 4, 5, 5, 6]);
+    const o = outcome(board, lastMove!);
+    expect(o.status).toBe("win");
+  });
+
+  it("detects a falling diagonal win ending in the top row", () => {
+    const board = withCells(emptyBoard(), [
+      [5, 0, 1],
+      [4, 1, 1],
+      [3, 2, 1],
+      [2, 3, 1],
+    ]);
+    const o = outcome(board, { row: 5, column: 0 });
+    expect(o.status).toBe("win");
+  });
+
   it("reports a draw on a full board with no win", () => {
     const board = drawBoard();
+    expect(board.every((r) => r.every((c) => c !== null))).toBe(true);
+    expect(hasAnyFour(board)).toBe(false);
     const o = outcome(board, { row: ROWS - 1, column: COLUMNS - 1 });
     expect(o).toEqual({ status: "draw" });
   });
@@ -244,11 +273,29 @@ function withCells(board: Board, cells: [number, number, Player][]): Board {
   return next;
 }
 
-/** A full 7x6 board without any four in a row. */
+/** True if any cell of the board is part of a four-in-a-row. */
+function hasAnyFour(board: Board): boolean {
+  for (let row = 0; row < ROWS; row++) {
+    for (let column = 0; column < COLUMNS; column++) {
+      if (
+        board[row]![column] &&
+        outcome(board, { row, column }).status === "win"
+      )
+        return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Legal move sequence (player 1 first) that fills the board with no four in a
+ * row: columns alternate vertically, in pairs horizontally.
+ */
+const DRAW_MOVES = [
+  0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 4, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4,
+  4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 5,
+];
+
 function drawBoard(): Board {
-  // Pattern by column groups: rows alternate with a shift every two rows.
-  const rowA = [1, 1, 2, 2, 1, 1, 2];
-  const rowB = [2, 2, 1, 1, 2, 2, 1];
-  const rows = [rowA, rowA, rowB, rowB, rowA, rowA];
-  return fromRows(rows);
+  return play(DRAW_MOVES).board;
 }

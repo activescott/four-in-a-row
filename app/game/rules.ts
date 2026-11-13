@@ -89,6 +89,7 @@ export function outcome(board: Board, lastMove: Position): Outcome {
           column += dc * sign;
         }
       }
+      // A longer line returns every cell in it (all of them, not just four).
       if (cells.length >= 4) return { status: "win", player, cells };
     }
   }
