@@ -1,3 +1,6 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
 CREATE TYPE "GameStatus" AS ENUM ('INVITED', 'ACTIVE', 'WON', 'DRAW');
 
@@ -93,3 +96,4 @@ ALTER TABLE "moves" ADD CONSTRAINT "moves_game_id_fkey" FOREIGN KEY ("game_id") 
 
 -- AddForeignKey
 ALTER TABLE "invites" ADD CONSTRAINT "invites_game_id_fkey" FOREIGN KEY ("game_id") REFERENCES "games"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
