@@ -1,3 +1,4 @@
 build/
 .react-router/
 package-lock.json
+app/generated/
