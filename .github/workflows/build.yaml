@@ -47,7 +47,7 @@ jobs:
           test "$(docker exec app id -u)" = 1000
           test "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' app)" = true
           test "$(docker exec app printenv NODE_ENV)" = production
-          ! docker exec app printenv E2E_TEST_MODE
+          if docker exec app printenv E2E_TEST_MODE; then exit 1; fi
           applied=$(docker exec db psql -U postgres -tAc "select count(*) from _prisma_migrations where finished_at is not null")
           test "$applied" = "$(ls -d prisma/migrations/*/ | wc -l)"
           test "$(status /ops/health/liveness)" = 200
