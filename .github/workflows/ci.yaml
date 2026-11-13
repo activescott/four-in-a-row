@@ -22,12 +22,6 @@ jobs:
         run: npm ci
       - name: Generate Prisma client
         run: npx prisma generate
-      # shortcut: compares only the first migration with Prisma's own SQL; switch
-      # to `migrate diff --from-migrations` with a shadow database at the second.
-      - name: Check migration matches schema
-        run: |
-          npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script --output "$RUNNER_TEMP/expected.sql"
-          diff -u "$RUNNER_TEMP/expected.sql" prisma/migrations/20261113000000_init/migration.sql
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
@@ -36,3 +30,13 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      # shortcut: compares only the first migration with Prisma's own SQL; switch
+      # to `migrate diff --from-migrations` with a shadow database at the second.
+      - name: Check migration matches schema
+        env:
+          DEBUG: "prisma*"
+        run: |
+          npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script > "$RUNNER_TEMP/expected.sql"
+          echo "migrate diff exit: $?"
+          cat "$RUNNER_TEMP/expected.sql"
+          diff -u "$RUNNER_TEMP/expected.sql" prisma/migrations/20261113000000_init/migration.sql
