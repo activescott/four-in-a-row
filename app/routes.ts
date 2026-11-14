@@ -5,6 +5,8 @@ export default [
   route("login", "routes/login.tsx"),
   route("logout", "routes/logout.ts"),
   route("profile", "routes/profile.tsx"),
+  route("games", "routes/games.tsx"),
+  route("games/:id", "routes/games.$id.tsx"),
   route("games/:id/moves", "routes/games.$id.moves.ts"),
   route("games/:id/state", "routes/games.$id.state.ts"),
   route("auth/:provider/:action", "routes/auth.$provider.$action.ts"),

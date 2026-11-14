@@ -108,11 +108,99 @@ export function gameState(game: GameWithMoves, userId: string) {
     nextPlayerId: game.nextPlayerId,
     yourTurn: game.nextPlayerId === userId,
     winnerId: game.winnerId,
+    result: resultFor(game, userId),
     winningCells: result?.status === "win" ? result.cells : [],
   };
 }
 
 export type GameState = ReturnType<typeof gameState>;
+
+export type GameResult = "won" | "lost" | "draw" | null;
+
+function resultFor(
+  game: { status: string; winnerId: string | null },
+  userId: string,
+): GameResult {
+  if (game.status === "WON") return game.winnerId === userId ? "won" : "lost";
+  if (game.status === "DRAW") return "draw";
+  return null;
+}
+
+/** The user's games, newest first, with the opponent's email. */
+export async function listGames(db: PrismaClient, userId: string) {
+  const games = await db.game.findMany({
+    where: { OR: [{ playerOneId: userId }, { playerTwoId: userId }] },
+    orderBy: { createdAt: "desc" },
+  });
+  const opponentIds = games
+    .map((g) => (g.playerOneId === userId ? g.playerTwoId : g.playerOneId))
+    .filter((id): id is string => id !== null);
+  const users = await db.user.findMany({ where: { id: { in: opponentIds } } });
+  const emails = new Map(users.map((u) => [u.id, u.email]));
+  return games.map((game) => {
+    const opponentId =
+      game.playerOneId === userId ? game.playerTwoId : game.playerOneId;
+    return {
+      id: game.id,
+      status: game.status,
+      opponent: opponentId ? (emails.get(opponentId) ?? null) : null,
+      yourTurn: game.nextPlayerId === userId,
+      result: resultFor(game, userId),
+    };
+  });
+}
+
+export type RematchOutcome =
+  { ok: true; gameId: string } | { ok: false; status: 404 | 409 };
+
+/**
+ * Starts a rematch of a finished game, or returns the one already started,
+ * so both players pressing Rematch land in the same game. The player who
+ * moved second moves first.
+ */
+export async function createRematch(
+  db: PrismaClient,
+  gameId: string,
+  userId: string,
+): Promise<RematchOutcome> {
+  return db.$transaction(async (tx) => {
+    // Serialises two Rematch presses on the same game.
+    await tx.$executeRaw`SELECT 1 FROM games WHERE id = ${gameId} FOR UPDATE`;
+    const game = await tx.game.findUnique({ where: { id: gameId } });
+    if (!game || !isPlayer(game, userId)) return { ok: false, status: 404 };
+    if (resultFor(game, userId) === null || !game.playerTwoId) {
+      return { ok: false, status: 409 };
+    }
+    const existing = await tx.game.findFirst({
+      where: { rematchOfId: gameId },
+    });
+    if (existing) return { ok: true, gameId: existing.id };
+    const created = await tx.game.create({
+      data: {
+        playerOneId: game.playerTwoId,
+        playerTwoId: game.playerOneId,
+        status: "ACTIVE",
+        nextPlayerId: game.playerTwoId,
+        rematchOfId: gameId,
+      },
+    });
+    return { ok: true, gameId: created.id };
+  });
+}
+
+/** Both players' emails, keyed by seat. */
+export async function playerEmails(
+  db: PrismaClient,
+  game: { playerOneId: string; playerTwoId: string | null },
+) {
+  const ids = [game.playerOneId, game.playerTwoId].filter(
+    (id): id is string => id !== null,
+  );
+  const users = await db.user.findMany({ where: { id: { in: ids } } });
+  const email = (id: string | null) =>
+    users.find((u) => u.id === id)?.email ?? null;
+  return { 1: email(game.playerOneId), 2: email(game.playerTwoId) };
+}
 
 export function isPlayer(
   game: { playerOneId: string; playerTwoId: string | null },
