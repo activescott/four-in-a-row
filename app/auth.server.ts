@@ -111,9 +111,7 @@ export const auth = new Auth({
       rpName: "Four in a Row",
       // Unset in dev and tests, so rpID and origin come from each request.
       appUrl: production ? required("APP_URL") : undefined,
-      challengeSecret: production
-        ? secret("PASSKEY_CHALLENGE_SECRET")
-        : (env.PASSKEY_CHALLENGE_SECRET ?? jwtSecret),
+      challengeSecret: secret("PASSKEY_CHALLENGE_SECRET"),
     }),
   ],
 });
