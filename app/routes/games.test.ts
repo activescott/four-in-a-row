@@ -257,6 +257,35 @@ test("a winning move ends the game and any move after it is refused with 409", a
   expect(await db.move.count({ where: { gameId: game.id } })).toBe(7);
 });
 
+test("the 42nd move of a full board with no four ends the game as a draw", async () => {
+  const { one, two, game } = await activeGame();
+  // DRAW_MOVES in rules.test.ts: a full board with no four in a row.
+  const columns = [
+    0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 4, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3,
+    4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 5,
+  ];
+  for (const [i, column] of columns.entries()) {
+    expect(await move(i % 2 === 0 ? one : two, game.id, column)).toMatchObject({
+      status: 200,
+    });
+  }
+
+  const drawn = await db.game.findUniqueOrThrow({ where: { id: game.id } });
+  expect(drawn).toMatchObject({
+    status: "DRAW",
+    winnerId: null,
+    nextPlayerId: null,
+    moveCount: 42,
+  });
+  expect(drawn.finishedAt).toBeInstanceOf(Date);
+
+  expect(await move(one, game.id, 3)).toEqual({
+    status: 409,
+    body: { ok: false, error: "game_over" },
+  });
+  expect(await db.move.count({ where: { gameId: game.id } })).toBe(42);
+});
+
 test("nextPlayerId never points at an empty seat", async () => {
   // An invited game: player two's seat stays empty until the invite is
   // accepted (#14), which is when nextPlayerId gets set for them.
