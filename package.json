@@ -16,6 +16,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@activescott/auth": "^5.9.0",
+    "@activescott/auth-adapter-react-router": "^3.1.0",
+    "@activescott/auth-provider-email": "^3.2.2",
+    "@activescott/auth-provider-passkey": "^2.3.0",
+    "@activescott/auth-store-prisma": "^0.1.0",
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "@react-router/express": "^8.5.1",
