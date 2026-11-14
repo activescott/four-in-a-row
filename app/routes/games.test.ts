@@ -367,3 +367,40 @@ test("rematch starts a new game with the same opponent, second mover first", asy
   expect(joined.headers.get("location")).toBe(`/games/${created.id}`);
   expect(await db.game.count({ where: { rematchOfId: game.id } })).toBe(1);
 });
+
+test("the game list shows each player whose turn it is and the result", async () => {
+  const { one, two, game: finished } = await activeGame();
+  await playToWin(one, two, finished.id);
+  const ongoing = await db.game.create({
+    data: {
+      playerOneId: two.id,
+      playerTwoId: one.id,
+      status: "ACTIVE",
+      nextPlayerId: two.id,
+    },
+  });
+  const list = async (as: Player) =>
+    (await reply(
+      await run(games.loader, get("/games", { cookie: as.cookie })),
+    )) as { status: number; body: { games: unknown[] } };
+
+  expect((await list(one)).body.games).toEqual([
+    expect.objectContaining({
+      id: ongoing.id,
+      opponent: two.email,
+      yourTurn: false,
+      result: null,
+    }),
+    expect.objectContaining({
+      id: finished.id,
+      opponent: two.email,
+      yourTurn: false,
+      result: "won",
+    }),
+  ]);
+  expect((await list(two)).body.games).toEqual([
+    expect.objectContaining({ id: ongoing.id, yourTurn: true, result: null }),
+    expect.objectContaining({ id: finished.id, result: "lost" }),
+  ]);
+  expect((await list(await player("loner"))).body.games).toEqual([]);
+});
