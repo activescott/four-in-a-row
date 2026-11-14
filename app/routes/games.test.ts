@@ -160,3 +160,21 @@ test("a move from a stale board (a double tap) is refused with 409", async () =>
   });
   expect(await db.move.count({ where: { gameId: game.id } })).toBe(1);
 });
+
+test("a move into a full column is refused with 422 and changes nothing", async () => {
+  const { one, two, game } = await activeGame();
+  for (let i = 0; i < 6; i++) await move(i % 2 === 0 ? one : two, game.id, 2);
+
+  expect(await move(one, game.id, 2)).toEqual({
+    status: 422,
+    body: { ok: false, error: "column_full" },
+  });
+  expect(await move(one, game.id, 7)).toEqual({
+    status: 422,
+    body: { ok: false, error: "column_out_of_range" },
+  });
+  expect(await db.game.findUnique({ where: { id: game.id } })).toMatchObject({
+    moveCount: 6,
+    nextPlayerId: one.id,
+  });
+});
