@@ -158,8 +158,9 @@ export type RematchOutcome =
 
 /**
  * Starts a rematch of a finished game, or returns the one already started,
- * so both players pressing Rematch land in the same game. The player who
- * moved second moves first.
+ * so both players pressing Rematch land in the same game. On an older game
+ * it follows the rematch chain to the newest game. The player who moved
+ * second moves first.
  */
 export async function createRematch(
   db: PrismaClient,
@@ -202,19 +203,26 @@ function startRematch(
     if (resultFor(game, userId) === null || !game.playerTwoId) {
       return { ok: false, status: 409 };
     }
-    const existing = await tx.game.findUnique({
-      where: { rematchOfId: gameId },
-    });
-    if (existing) {
-      return { ok: true, gameId: existing.id, created: false };
+    // Rematch on an older game in a chain rematches the newest one, or joins
+    // it if it's still being played.
+    let latest = game;
+    for (;;) {
+      const next = await tx.game.findUnique({
+        where: { rematchOfId: latest.id },
+      });
+      if (!next) break;
+      latest = next;
+    }
+    if (resultFor(latest, userId) === null || !latest.playerTwoId) {
+      return { ok: true, gameId: latest.id, created: false };
     }
     const created = await tx.game.create({
       data: {
-        playerOneId: game.playerTwoId,
-        playerTwoId: game.playerOneId,
+        playerOneId: latest.playerTwoId,
+        playerTwoId: latest.playerOneId,
         status: "ACTIVE",
-        nextPlayerId: game.playerTwoId,
-        rematchOfId: gameId,
+        nextPlayerId: latest.playerTwoId,
+        rematchOfId: latest.id,
       },
     });
     return { ok: true, gameId: created.id, created: true };
