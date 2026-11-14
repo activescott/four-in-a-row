@@ -97,6 +97,13 @@ export const auth = new Auth({
       logger.warn({ event: "auth.warn", ...context }, message),
   },
   abuse: {
+    // Traefik appends the peer it saw to X-Forwarded-For; everything left of
+    // that hop, and cf-connecting-ip, is whatever the caller sent.
+    clientIp: {
+      getClientIp: (request) =>
+        request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() ||
+        null,
+    },
     onBlocked: ({ reason, providerId, rule }) =>
       logger.warn({
         event: "auth.initiate.blocked",
