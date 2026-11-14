@@ -2,7 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ["app/**/*.test.{ts,tsx}"],
+    include: ["{app,server}/**/*.test.{ts,tsx}"],
     // Obviously fake values: no test talks to a real SMTP server, and these
     // secrets sign nothing outside a test run.
     env: {
