@@ -408,6 +408,57 @@ test("rematch starts a new game with the same opponent, second mover first", asy
   expect(await db.game.count({ where: { rematchOfId: game.id } })).toBe(1);
 });
 
+test("rematch on an older finished game rematches the newest game in its chain", async () => {
+  const { one, two, game: first } = await activeGame();
+  await playToWin(one, two, first.id);
+  await rematch(two, first.id);
+  const second = await db.game.findUniqueOrThrow({
+    where: { rematchOfId: first.id },
+  });
+  // Two moves first in the rematch and wins it.
+  await playToWin(two, one, second.id);
+
+  const started = (await run(
+    games.action,
+    formPost(
+      "/games",
+      { rematchOf: first.id },
+      { cookie: one.cookie, referer: "/games" },
+    ),
+  )) as Response;
+
+  const third = await db.game.findUniqueOrThrow({
+    where: { rematchOfId: second.id },
+  });
+  expect(started.headers.get("location")).toBe(`/games/${third.id}`);
+  expect(third).toMatchObject({
+    playerOneId: one.id,
+    playerTwoId: two.id,
+    status: "ACTIVE",
+    nextPlayerId: one.id,
+  });
+  // Pressing it again on either finished game joins the same new game.
+  for (const [as, from] of [
+    [two, first],
+    [one, second],
+  ] as const) {
+    const again = (await run(
+      games.action,
+      formPost(
+        "/games",
+        { rematchOf: from.id },
+        { cookie: as.cookie, referer: "/games" },
+      ),
+    )) as Response;
+    expect(again.headers.get("location")).toBe(`/games/${third.id}`);
+  }
+  expect(
+    await db.game.count({
+      where: { rematchOfId: { in: [first.id, second.id, third.id] } },
+    }),
+  ).toBe(2);
+});
+
 test("the game list shows each player whose turn it is and the result", async () => {
   const { one, two, game: finished } = await activeGame();
   await playToWin(one, two, finished.id);
