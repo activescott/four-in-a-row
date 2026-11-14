@@ -78,6 +78,42 @@ export async function makeMove(
   });
 }
 
+/** The game with its moves, or null unless the user is one of its players. */
+export async function findGameForPlayer(
+  db: PrismaClient,
+  gameId: string,
+  userId: string,
+) {
+  const game = await db.game.findUnique({
+    where: { id: gameId },
+    include: { moves: { orderBy: { number: "asc" } } },
+  });
+  return game && isPlayer(game, userId) ? game : null;
+}
+
+type GameWithMoves = NonNullable<Awaited<ReturnType<typeof findGameForPlayer>>>;
+
+/** What a player sees: the board, whose turn it is and the result. */
+export function gameState(game: GameWithMoves, userId: string) {
+  const replay = boardFromMoves(game.moves.map((m) => m.column));
+  if (!replay.ok) throw new Error(`Game ${game.id} has an invalid move list`);
+  const last = replay.lastMove;
+  const result = last ? outcome(replay.board, last) : null;
+  return {
+    id: game.id,
+    status: game.status,
+    moveCount: game.moveCount,
+    board: replay.board,
+    you: (userId === game.playerOneId ? 1 : 2) as Player,
+    nextPlayerId: game.nextPlayerId,
+    yourTurn: game.nextPlayerId === userId,
+    winnerId: game.winnerId,
+    winningCells: result?.status === "win" ? result.cells : [],
+  };
+}
+
+export type GameState = ReturnType<typeof gameState>;
+
 export function isPlayer(
   game: { playerOneId: string; playerTwoId: string | null },
   userId: string,

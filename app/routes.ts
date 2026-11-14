@@ -6,6 +6,7 @@ export default [
   route("logout", "routes/logout.ts"),
   route("profile", "routes/profile.tsx"),
   route("games/:id/moves", "routes/games.$id.moves.ts"),
+  route("games/:id/state", "routes/games.$id.state.ts"),
   route("auth/:provider/:action", "routes/auth.$provider.$action.ts"),
   route("e2e/captured-email", "routes/e2e.captured-email.ts"),
   route("ops/health/liveness", "routes/ops.health.liveness.ts"),
