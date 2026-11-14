@@ -166,15 +166,43 @@ export async function createRematch(
   gameId: string,
   userId: string,
 ): Promise<RematchOutcome> {
-  const result = await db.$transaction(async (tx): Promise<RematchOutcome> => {
-    // Serialises two Rematch presses on the same game.
+  let result: RematchOutcome;
+  try {
+    result = await startRematch(db, gameId, userId);
+  } catch (error) {
+    // Another press created the rematch between our lookup and our insert,
+    // and the unique index on rematch_of_id refused this one. Its
+    // transaction is aborted, so look again in a new one.
+    if (!isUniqueViolation(error)) throw error;
+    result = await startRematch(db, gameId, userId);
+  }
+  if (result.ok) {
+    logger.info({
+      event: "game.rematch",
+      gameId: result.gameId,
+      rematchOfId: gameId,
+      userId,
+      created: result.created,
+    });
+  }
+  return result;
+}
+
+function startRematch(
+  db: PrismaClient,
+  gameId: string,
+  userId: string,
+): Promise<RematchOutcome> {
+  return db.$transaction(async (tx): Promise<RematchOutcome> => {
+    // Serialises two Rematch presses on the same game. The unique index on
+    // rematch_of_id backs it up.
     await tx.$executeRaw`SELECT 1 FROM games WHERE id = ${gameId} FOR UPDATE`;
     const game = await tx.game.findUnique({ where: { id: gameId } });
     if (!game || !isPlayer(game, userId)) return { ok: false, status: 404 };
     if (resultFor(game, userId) === null || !game.playerTwoId) {
       return { ok: false, status: 409 };
     }
-    const existing = await tx.game.findFirst({
+    const existing = await tx.game.findUnique({
       where: { rematchOfId: gameId },
     });
     if (existing) {
@@ -191,16 +219,15 @@ export async function createRematch(
     });
     return { ok: true, gameId: created.id, created: true };
   });
-  if (result.ok) {
-    logger.info({
-      event: "game.rematch",
-      gameId: result.gameId,
-      rematchOfId: gameId,
-      userId,
-      created: result.created,
-    });
-  }
-  return result;
+}
+
+function isUniqueViolation(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "P2002"
+  );
 }
 
 /** Both players' emails, keyed by seat. */
