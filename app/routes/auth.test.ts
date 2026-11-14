@@ -251,6 +251,24 @@ test("a request for a host other than APP_URL's is refused and no mail is sent",
   expect((await readCapturedEmail(email)).status).toBe(404);
 });
 
+test("a fresh cf-connecting-ip on each request does not escape the per-IP limit", async () => {
+  // The library allows 3 initiates per IP per minute, so the 4th from the
+  // address Traefik saw must be limited whatever the caller claims.
+  const before = events("auth.initiate.blocked").length;
+  for (const n of [1, 2, 3, 4]) {
+    const request = formPost("/auth/email/initiate", {
+      email: `spoof-${n}@example.com`,
+    });
+    request.headers.set("cf-connecting-ip", `198.51.100.${n}`);
+    request.headers.set("x-forwarded-for", `203.0.113.${n}, 192.0.2.7`);
+    await auth(request);
+  }
+
+  expect(events("auth.initiate.blocked").slice(before)).toEqual([
+    expect.objectContaining({ reason: "ip_rate_limited" }),
+  ]);
+});
+
 test("an existing account can sign in again although it is not in SIGNUP_EMAILS", async () => {
   const { response } = await signIn(await member("member@example.com"));
 
