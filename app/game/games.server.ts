@@ -19,7 +19,7 @@ export async function makeMove(
   db: PrismaClient,
   input: MoveInput,
 ): Promise<MoveOutcome> {
-  const { gameId, userId, column } = input;
+  const { gameId, userId, column, expectedMoveCount } = input;
   return db.$transaction(async (tx) => {
     const game = await tx.game.findUnique({
       where: { id: gameId },
@@ -27,6 +27,12 @@ export async function makeMove(
     });
     if (!game || !isPlayer(game, userId)) {
       return { ok: false, status: 404, error: "not_found" };
+    }
+    if (game.nextPlayerId !== userId) {
+      return { ok: false, status: 409, error: "not_your_turn" };
+    }
+    if (game.moveCount !== expectedMoveCount) {
+      return { ok: false, status: 409, error: "stale" };
     }
 
     const replay = boardFromMoves(game.moves.map((m) => m.column));
@@ -37,13 +43,16 @@ export async function makeMove(
 
     const next = outcome(result.board, result.move);
     const other = seat === 1 ? game.playerTwoId : game.playerOneId;
-    await tx.game.update({
-      where: { id: gameId },
+    // Conditional on the count read above: a concurrent move that got here
+    // first leaves zero rows to update. @@unique([gameId, number]) backs it up.
+    const { count } = await tx.game.updateMany({
+      where: { id: gameId, moveCount: game.moveCount },
       data: {
         moveCount: game.moveCount + 1,
         nextPlayerId: next.status === "ongoing" ? other : null,
       },
     });
+    if (count === 0) return { ok: false, status: 409, error: "stale" };
     await tx.move.create({
       data: {
         gameId,
