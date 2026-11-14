@@ -1,7 +1,7 @@
 import { afterAll, expect, test, vi } from "vitest";
 import type { PrismaClient } from "../generated/prisma/client";
 import { createPgliteDb } from "../pglite.server";
-import { formPost, run } from "../test/routes";
+import { formPost, get, run } from "../test/routes";
 
 // Invites are a later step (#14), so these tests seed both players and the
 // game directly, and sign each player in with a session cookie from Auth.
@@ -20,6 +20,7 @@ afterAll(async () => {
 
 const { auth } = await import("../auth.server");
 const moves = await import("./games.$id.moves");
+const state = await import("./games.$id.state");
 
 type Player = { id: string; email: string; cookie: string };
 
@@ -85,6 +86,16 @@ async function reply(result: unknown) {
     return { status: init?.status ?? 200, body: data };
   }
   return { status: 200, body: result };
+}
+
+async function readState(as: Player, gameId: string) {
+  return reply(
+    await run(
+      state.loader,
+      get(`/games/${gameId}/state`, { cookie: as.cookie }),
+      { id: gameId },
+    ),
+  );
 }
 
 async function move(
@@ -210,4 +221,37 @@ test("a winning move ends the game and any move after it is refused with 409", a
     });
   }
   expect(await db.move.count({ where: { gameId: game.id } })).toBe(7);
+});
+
+test("nextPlayerId never points at an empty seat", async () => {
+  // An invited game: player two's seat stays empty until the invite is
+  // accepted (#14), which is when nextPlayerId gets set for them.
+  const one = await player("inviter");
+  const game = await db.game.create({
+    data: { playerOneId: one.id, status: "INVITED", nextPlayerId: one.id },
+  });
+
+  expect(await move(one, game.id, 3)).toMatchObject({ status: 200 });
+  expect(await db.game.findUnique({ where: { id: game.id } })).toMatchObject({
+    status: "INVITED",
+    playerTwoId: null,
+    nextPlayerId: null,
+    moveCount: 1,
+  });
+  expect(await move(one, game.id, 4)).toEqual({
+    status: 409,
+    body: { ok: false, error: "not_your_turn" },
+  });
+  expect(await readState(one, game.id)).toMatchObject({
+    status: 200,
+    body: { status: "INVITED", nextPlayerId: null, yourTurn: false },
+  });
+
+  // And in a full game, every turn goes to one of the two seated players.
+  const { one: a, two: b, game: played } = await activeGame();
+  for (const column of [0, 1, 2, 3, 4, 5, 6, 0]) {
+    const turn = await db.game.findUniqueOrThrow({ where: { id: played.id } });
+    expect([a.id, b.id]).toContain(turn.nextPlayerId);
+    await move(turn.nextPlayerId === a.id ? a : b, played.id, column);
+  }
 });
