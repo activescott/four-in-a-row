@@ -21,6 +21,8 @@ afterAll(async () => {
 const { auth } = await import("../auth.server");
 const moves = await import("./games.$id.moves");
 const state = await import("./games.$id.state");
+const board = await import("./games.$id");
+const games = await import("./games");
 
 type Player = { id: string; email: string; cookie: string };
 
@@ -254,4 +256,62 @@ test("nextPlayerId never points at an empty seat", async () => {
     expect([a.id, b.id]).toContain(turn.nextPlayerId);
     await move(turn.nextPlayerId === a.id ? a : b, played.id, column);
   }
+});
+
+test("a non-player gets 404 from the board, moves, state and rematch", async () => {
+  const { one, two, game } = await activeGame();
+  for (const [as, column] of [
+    [one, 0],
+    [two, 1],
+    [one, 0],
+    [two, 1],
+    [one, 0],
+    [two, 1],
+    [one, 0],
+  ] as const) {
+    await move(as, game.id, column);
+  }
+  const finished = await db.game.findUniqueOrThrow({ where: { id: game.id } });
+  expect(finished.status).toBe("WON");
+  const outsider = await player("outsider");
+  const params = { id: game.id };
+
+  const responses = {
+    board: await run(
+      board.loader,
+      get(`/games/${game.id}`, { cookie: outsider.cookie }),
+      params,
+    ),
+    move: await run(
+      moves.action,
+      formPost(
+        `/games/${game.id}/moves`,
+        { column: "3", expectedMoveCount: "7" },
+        { cookie: outsider.cookie, referer: `/games/${game.id}` },
+      ),
+      params,
+    ),
+    state: await run(
+      state.loader,
+      get(`/games/${game.id}/state`, { cookie: outsider.cookie }),
+      params,
+    ),
+    rematch: await run(
+      games.action,
+      formPost(
+        "/games",
+        { rematchOf: game.id },
+        { cookie: outsider.cookie, referer: "/games" },
+      ),
+    ),
+  };
+  for (const [route, response] of Object.entries(responses)) {
+    expect({ route, status: (await reply(response)).status }).toEqual({
+      route,
+      status: 404,
+    });
+  }
+
+  expect(await db.move.count({ where: { gameId: game.id } })).toBe(7);
+  expect(await db.game.count({ where: { rematchOfId: game.id } })).toBe(0);
 });
