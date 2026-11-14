@@ -259,8 +259,8 @@ describe("outcome", () => {
     // Player 2's last disc, in the top right corner, completes a falling
     // diagonal; no earlier move wins.
     const columns = [
-      0, 0, 6, 4, 3, 2, 1, 1, 5, 4, 3, 3, 0, 1, 4, 0, 2, 4, 0, 5, 4, 3, 3, 1,
-      1, 5, 5, 1, 3, 2, 2, 2, 6, 5, 2, 6, 6, 4, 0, 6, 5, 6,
+      0, 0, 6, 4, 3, 2, 1, 1, 5, 4, 3, 3, 0, 1, 4, 0, 2, 4, 0, 5, 4, 3, 3, 1, 1,
+      5, 5, 1, 3, 2, 2, 2, 6, 5, 2, 6, 6, 4, 0, 6, 5, 6,
     ];
     expect(columns).toHaveLength(ROWS * COLUMNS);
     const before = boardFromMoves(columns.slice(0, -1));
