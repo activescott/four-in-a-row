@@ -29,7 +29,8 @@ jobs:
           set -eu
           # --internal: no route out, so a download at boot would fail the step.
           docker network create --internal smoke
-          docker run -d --name db --network smoke -e POSTGRES_PASSWORD=smoke postgres:17-alpine
+          docker run -d --name db --network smoke -e POSTGRES_PASSWORD=smoke \
+            postgres:17-alpine@sha256:d3244e8ce3f165ee3c93d9c4a4b1d0fe48b3a89e2287b717fdcbbde92d405065
           until docker exec db pg_isready -U postgres -q; do sleep 1; done
           docker run -d --name app --network smoke --user 1000:1000 --read-only --tmpfs /tmp \
             -e DATABASE_URL=postgresql://postgres:smoke@db:5432/postgres four-in-a-row:ci
@@ -55,10 +56,11 @@ jobs:
 
           # Traefik terminates TLS: an https Origin matching the forwarded proto
           # and host must get past the auth Origin gate, which answers 400.
+          # status() prints 0 when the app is unreachable, so require >= 200.
           auth=$(status /auth/email/initiate POST \
             '{"Host":"four.example","X-Forwarded-Proto":"https","Origin":"https://four.example","Content-Type":"application/x-www-form-urlencoded"}')
           echo "POST /auth/email/initiate: $auth"
-          test "$auth" != 400 && test "$auth" -lt 500
+          test "$auth" -ge 200 && test "$auth" -lt 500 && test "$auth" != 400
       - name: Show container logs
         if: always()
         run: docker logs app || true
