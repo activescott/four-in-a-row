@@ -307,7 +307,7 @@ test("nextPlayerId never points at an empty seat", async () => {
   });
   expect(await readState(one, game.id)).toMatchObject({
     status: 200,
-    body: { status: "INVITED", nextPlayerId: null, yourTurn: false },
+    body: { status: "INVITED", yourTurn: false },
   });
 
   // And in a full game, every turn goes to one of the two seated players.
@@ -317,6 +317,29 @@ test("nextPlayerId never points at an empty seat", async () => {
     expect([a.id, b.id]).toContain(turn.nextPlayerId);
     await move(turn.nextPlayerId === a.id ? a : b, played.id, column);
   }
+});
+
+test("the state payload has yourTurn and result but no user ids", async () => {
+  const { one, two, game } = await activeGame();
+  const ongoing = await readState(one, game.id);
+  expect(ongoing).toMatchObject({
+    status: 200,
+    body: { yourTurn: true, result: null },
+  });
+
+  await playToWin(one, two, game.id);
+  for (const [as, result] of [
+    [one, "won"],
+    [two, "lost"],
+  ] as const) {
+    const { body } = await readState(as, game.id);
+    expect(body).toMatchObject({ yourTurn: false, result });
+    expect(body).not.toHaveProperty("nextPlayerId");
+    expect(body).not.toHaveProperty("winnerId");
+    expect(JSON.stringify(body)).not.toContain(one.id);
+    expect(JSON.stringify(body)).not.toContain(two.id);
+  }
+  expect(JSON.stringify(ongoing.body)).not.toContain(two.id);
 });
 
 test("a non-player gets 404 from the board, moves, state and rematch", async () => {
