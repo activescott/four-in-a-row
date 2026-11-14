@@ -132,3 +132,31 @@ test("a legal move drops the disc to the lowest open row and passes the turn", a
     { number: 2, playerId: two.id, column: 3, row: 1 },
   ]);
 });
+
+test("a move out of turn is refused with 409 and changes nothing", async () => {
+  const { one, two, game } = await activeGame();
+
+  expect(await move(two, game.id, 0)).toEqual({
+    status: 409,
+    body: { ok: false, error: "not_your_turn" },
+  });
+  await move(one, game.id, 0);
+  expect(await move(one, game.id, 1)).toMatchObject({ status: 409 });
+
+  expect(await db.move.count({ where: { gameId: game.id } })).toBe(1);
+  expect(await db.game.findUnique({ where: { id: game.id } })).toMatchObject({
+    moveCount: 1,
+    nextPlayerId: two.id,
+  });
+});
+
+test("a move from a stale board (a double tap) is refused with 409", async () => {
+  const { one, two, game } = await activeGame();
+  await move(one, game.id, 0);
+
+  expect(await move(two, game.id, 1, 0)).toEqual({
+    status: 409,
+    body: { ok: false, error: "stale" },
+  });
+  expect(await db.move.count({ where: { gameId: game.id } })).toBe(1);
+});
