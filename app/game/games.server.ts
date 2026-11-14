@@ -107,9 +107,7 @@ export function gameState(game: GameWithMoves, userId: string) {
     moveCount: game.moveCount,
     board: replay.board,
     you: (userId === game.playerOneId ? 1 : 2) as Player,
-    nextPlayerId: game.nextPlayerId,
     yourTurn: game.nextPlayerId === userId,
-    winnerId: game.winnerId,
     result: resultFor(game, userId),
     winningCells: result?.status === "win" ? result.cells : [],
   };
