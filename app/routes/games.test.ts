@@ -178,3 +178,36 @@ test("a move into a full column is refused with 422 and changes nothing", async 
     nextPlayerId: one.id,
   });
 });
+
+test("a winning move ends the game and any move after it is refused with 409", async () => {
+  const { one, two, game } = await activeGame();
+  // One stacks column 0, two stacks column 1; one's fourth disc wins.
+  for (const [as, column] of [
+    [one, 0],
+    [two, 1],
+    [one, 0],
+    [two, 1],
+    [one, 0],
+    [two, 1],
+    [one, 0],
+  ] as const) {
+    expect(await move(as, game.id, column)).toMatchObject({ status: 200 });
+  }
+
+  const won = await db.game.findUniqueOrThrow({ where: { id: game.id } });
+  expect(won).toMatchObject({
+    status: "WON",
+    winnerId: one.id,
+    nextPlayerId: null,
+    moveCount: 7,
+  });
+  expect(won.finishedAt).toBeInstanceOf(Date);
+
+  for (const as of [two, one]) {
+    expect(await move(as, game.id, 3)).toEqual({
+      status: 409,
+      body: { ok: false, error: "game_over" },
+    });
+  }
+  expect(await db.move.count({ where: { gameId: game.id } })).toBe(7);
+});
