@@ -230,6 +230,27 @@ test("an address the gate does not allow is refused and no mail is sent", async 
   });
 });
 
+test("a request for a host other than APP_URL's is refused and no mail is sent", async () => {
+  vi.stubEnv("APP_URL", "http://localhost");
+  const email = await member("foreign-host@example.com");
+  // The origin gate alone would pass this: Referer matches the request URL.
+  const foreign = "http://evil.example";
+  const response = await auth(
+    new Request(`${foreign}/auth/email/initiate`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+        referer: `${foreign}/login`,
+      },
+      body: new URLSearchParams({ email }),
+    }),
+  ).finally(() => vi.unstubAllEnvs());
+
+  expect(response.status).toBe(421);
+  expect((await readCapturedEmail(email)).status).toBe(404);
+});
+
 test("an existing account can sign in again although it is not in SIGNUP_EMAILS", async () => {
   const { response } = await signIn(await member("member@example.com"));
 
