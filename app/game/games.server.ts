@@ -1,4 +1,5 @@
 import type { PrismaClient } from "../generated/prisma/client";
+import { logger } from "../logger.server";
 import { applyMove, boardFromMoves, outcome, type Player } from "./rules";
 
 export type MoveInput = {
@@ -9,7 +10,8 @@ export type MoveInput = {
 };
 
 export type MoveFailure = { status: 404 | 409 | 422; error: string };
-export type MoveOutcome = { ok: true } | ({ ok: false } & MoveFailure);
+export type MoveOutcome =
+  { ok: true; moveNumber: number } | ({ ok: false } & MoveFailure);
 
 /**
  * Plays one move in one transaction: the checks use the rules module, then
@@ -74,7 +76,7 @@ export async function makeMove(
         row: result.move.row,
       },
     });
-    return { ok: true };
+    return { ok: true, moveNumber: game.moveCount + 1 };
   });
 }
 
@@ -151,7 +153,8 @@ export async function listGames(db: PrismaClient, userId: string) {
 }
 
 export type RematchOutcome =
-  { ok: true; gameId: string } | { ok: false; status: 404 | 409 };
+  | { ok: true; gameId: string; created: boolean }
+  | { ok: false; status: 404 | 409 };
 
 /**
  * Starts a rematch of a finished game, or returns the one already started,
@@ -163,7 +166,7 @@ export async function createRematch(
   gameId: string,
   userId: string,
 ): Promise<RematchOutcome> {
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx): Promise<RematchOutcome> => {
     // Serialises two Rematch presses on the same game.
     await tx.$executeRaw`SELECT 1 FROM games WHERE id = ${gameId} FOR UPDATE`;
     const game = await tx.game.findUnique({ where: { id: gameId } });
@@ -174,7 +177,9 @@ export async function createRematch(
     const existing = await tx.game.findFirst({
       where: { rematchOfId: gameId },
     });
-    if (existing) return { ok: true, gameId: existing.id };
+    if (existing) {
+      return { ok: true, gameId: existing.id, created: false };
+    }
     const created = await tx.game.create({
       data: {
         playerOneId: game.playerTwoId,
@@ -184,8 +189,18 @@ export async function createRematch(
         rematchOfId: gameId,
       },
     });
-    return { ok: true, gameId: created.id };
+    return { ok: true, gameId: created.id, created: true };
   });
+  if (result.ok) {
+    logger.info({
+      event: "game.rematch",
+      gameId: result.gameId,
+      rematchOfId: gameId,
+      userId,
+      created: result.created,
+    });
+  }
+  return result;
 }
 
 /** Both players' emails, keyed by seat. */
