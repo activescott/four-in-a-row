@@ -90,6 +90,27 @@ async function reply(result: unknown) {
   return { status: 200, body: result };
 }
 
+// One stacks column 0, two stacks column 1; one's fourth disc wins.
+async function playToWin(one: Player, two: Player, gameId: string) {
+  for (let i = 0; i < 7; i++) {
+    const result = await move(i % 2 === 0 ? one : two, gameId, i % 2);
+    expect(result.status).toBe(200);
+  }
+}
+
+async function rematch(as: Player, gameId: string) {
+  return reply(
+    await run(
+      games.action,
+      formPost(
+        "/games",
+        { rematchOf: gameId },
+        { cookie: as.cookie, referer: "/games" },
+      ),
+    ),
+  );
+}
+
 async function readState(as: Player, gameId: string) {
   return reply(
     await run(
@@ -314,4 +335,35 @@ test("a non-player gets 404 from the board, moves, state and rematch", async () 
 
   expect(await db.move.count({ where: { gameId: game.id } })).toBe(7);
   expect(await db.game.count({ where: { rematchOfId: game.id } })).toBe(0);
+});
+
+test("rematch starts a new game with the same opponent, second mover first", async () => {
+  const { one, two, game } = await activeGame();
+  expect(await rematch(two, game.id)).toMatchObject({ status: 409 });
+  await playToWin(one, two, game.id);
+
+  const started = await rematch(two, game.id);
+  expect(started.status).toBe(302);
+  const created = await db.game.findFirstOrThrow({
+    where: { rematchOfId: game.id },
+  });
+  expect(created).toMatchObject({
+    playerOneId: two.id,
+    playerTwoId: one.id,
+    status: "ACTIVE",
+    nextPlayerId: two.id,
+    moveCount: 0,
+  });
+
+  // The other player's rematch joins the same game rather than a second one.
+  const joined = (await run(
+    games.action,
+    formPost(
+      "/games",
+      { rematchOf: game.id },
+      { cookie: one.cookie, referer: "/games" },
+    ),
+  )) as Response;
+  expect(joined.headers.get("location")).toBe(`/games/${created.id}`);
+  expect(await db.game.count({ where: { rematchOfId: game.id } })).toBe(1);
 });
