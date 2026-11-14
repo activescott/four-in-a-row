@@ -28,6 +28,9 @@ export async function makeMove(
     if (!game || !isPlayer(game, userId)) {
       return { ok: false, status: 404, error: "not_found" };
     }
+    if (game.status === "WON" || game.status === "DRAW") {
+      return { ok: false, status: 409, error: "game_over" };
+    }
     if (game.nextPlayerId !== userId) {
       return { ok: false, status: 409, error: "not_your_turn" };
     }
@@ -50,6 +53,15 @@ export async function makeMove(
       data: {
         moveCount: game.moveCount + 1,
         nextPlayerId: next.status === "ongoing" ? other : null,
+        ...(next.status === "win" && {
+          status: "WON",
+          winnerId: userId,
+          finishedAt: new Date(),
+        }),
+        ...(next.status === "draw" && {
+          status: "DRAW",
+          finishedAt: new Date(),
+        }),
       },
     });
     if (count === 0) return { ok: false, status: 409, error: "stale" };
