@@ -92,3 +92,24 @@ test("rejects a second move with the same game and number", async () => {
   ).rejects.toMatchObject({ code: "P2002" });
   expect(await db.move.count({ where: { gameId: game.id } })).toBe(1);
 });
+
+test("rejects a second game that is a rematch of the same game", async () => {
+  const user = await db.user.create({ data: { email: "rem@example.com" } });
+  const original = await db.game.create({
+    data: { playerOneId: user.id, status: "WON", winnerId: user.id },
+  });
+  const rematch = {
+    playerOneId: user.id,
+    status: "ACTIVE" as const,
+    rematchOfId: original.id,
+  };
+  await db.game.create({ data: rematch });
+
+  await expect(db.game.create({ data: rematch })).rejects.toMatchObject({
+    code: "P2002",
+  });
+  expect(await db.game.count({ where: { rematchOfId: original.id } })).toBe(1);
+  // Ordinary games all have a null rematchOfId and are unaffected.
+  await db.game.create({ data: { playerOneId: user.id, status: "INVITED" } });
+  await db.game.create({ data: { playerOneId: user.id, status: "INVITED" } });
+});

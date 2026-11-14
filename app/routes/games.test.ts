@@ -33,7 +33,7 @@ const moves = await import("./games.$id.moves");
 const state = await import("./games.$id.state");
 const board = await import("./games.$id");
 const games = await import("./games");
-const { makeMove } = await import("../game/games.server");
+const { createRematch, makeMove } = await import("../game/games.server");
 
 type Player = { id: string; email: string; cookie: string };
 
@@ -494,6 +494,24 @@ test("two rematch posts on a double submit start one new game", async () => {
   expect(await db.game.count({ where: { rematchOfId: game.id } })).toBe(1);
 });
 
+test("a rematch whose lookup lost the race returns the game the other press created", async () => {
+  // PGlite runs one transaction at a time, so instead the first lookup for an
+  // existing rematch misses the game another press has already created, as a
+  // concurrent transaction on Postgres could. The unique index on
+  // rematch_of_id refuses the second game.
+  const { one, two, game } = await activeGame();
+  await playToWin(one, two, game.id);
+  expect(await rematch(two, game.id)).toMatchObject({ status: 302 });
+  const existing = await db.game.findFirstOrThrow({
+    where: { rematchOfId: game.id },
+  });
+
+  const result = await createRematch(missFirstRematchLookup(), game.id, one.id);
+
+  expect(result).toEqual({ ok: true, gameId: existing.id, created: false });
+  expect(await db.game.count({ where: { rematchOfId: game.id } })).toBe(1);
+});
+
 test("moves and rematches are logged with user ids, never emails", async () => {
   const { one, two, game } = await activeGame();
   log.capture.lines.length = 0;
@@ -581,6 +599,47 @@ function staleGameReads(snapshot: unknown): PrismaClient {
       if (prop !== "$transaction") return Reflect.get(target, prop);
       return (fn: (tx: unknown) => Promise<unknown>) =>
         target.$transaction((tx) => fn(withStaleGame(tx)));
+    },
+  });
+}
+
+// The test database, except that the first lookup by rematchOfId inside a
+// transaction finds nothing.
+function missFirstRematchLookup(): PrismaClient {
+  let missed = false;
+  const misses = (args: unknown) =>
+    !missed &&
+    typeof args === "object" &&
+    args !== null &&
+    "where" in args &&
+    typeof args.where === "object" &&
+    args.where !== null &&
+    "rematchOfId" in args.where;
+  const withMiss = <T extends object>(tx: T) =>
+    new Proxy(tx, {
+      get(target, prop) {
+        const value = Reflect.get(target, prop);
+        if (prop !== "game") return value;
+        return new Proxy(value as object, {
+          get(game, method) {
+            const fn = Reflect.get(game, method);
+            if (method !== "findUnique" && method !== "findFirst") return fn;
+            return async (args: unknown) => {
+              if (misses(args)) {
+                missed = true;
+                return null;
+              }
+              return (fn as (a: unknown) => unknown).call(game, args);
+            };
+          },
+        });
+      },
+    });
+  return new Proxy(db, {
+    get(target, prop) {
+      if (prop !== "$transaction") return Reflect.get(target, prop);
+      return (fn: (tx: unknown) => Promise<unknown>) =>
+        target.$transaction((tx) => fn(withMiss(tx)));
     },
   });
 }
