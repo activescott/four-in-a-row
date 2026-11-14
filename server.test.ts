@@ -2,20 +2,20 @@ import { request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { ServerBuild } from "react-router";
 import { afterAll, expect, test, vi } from "vitest";
-import type { PrismaClient } from "../app/generated/prisma/client";
-import { createPgliteDb } from "../app/pglite.server";
+import type { PrismaClient } from "./app/generated/prisma/client";
+import { createPgliteDb } from "./app/pglite.server";
 
 const { getDb } = vi.hoisted(() => ({
   getDb: vi.fn<() => Promise<PrismaClient>>(),
 }));
-vi.mock("../app/db.server", () => ({ getDb }));
+vi.mock("./app/db.server", () => ({ getDb }));
 
 // The auth module reads the database when it first loads.
 const db = await createPgliteDb();
 getDb.mockResolvedValue(db);
 
-const authRoute = await import("../app/routes/auth.$provider.$action");
-const { createApp } = await import("./app");
+const authRoute = await import("./app/routes/auth.$provider.$action");
+const { createApp } = await import("./server.mjs");
 
 // Just enough of a server build to route /auth/:provider/:action through
 // react-router, the way the production build does.
