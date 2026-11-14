@@ -1,0 +1,111 @@
+name: build
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # Builds the image and smoke-tests it; never pushes.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: four-in-a-row:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke-test image
+        run: |
+          set -eu
+          # --internal: no route out, so a download at boot would fail the step.
+          docker network create --internal smoke
+          docker run -d --name db --network smoke -e POSTGRES_PASSWORD=smoke postgres:17-alpine
+          until docker exec db pg_isready -U postgres -q; do sleep 1; done
+          docker run -d --name app --network smoke --user 1000:1000 --read-only --tmpfs /tmp \
+            -e DATABASE_URL=postgresql://postgres:smoke@db:5432/postgres four-in-a-row:ci
+
+          # status PATH [METHOD] [HEADERS_JSON]: HTTP status from inside the app container.
+          status() {
+            docker exec app node -e '
+              const [path, method = "GET", headers = "{}"] = process.argv.slice(1);
+              require("http").request({ port: 3000, path, method, headers: JSON.parse(headers) },
+                (res) => console.log(res.statusCode)).on("error", () => console.log(0)).end();
+            ' "$@"
+          }
+          for _ in $(seq 60); do [ "$(status /ops/health/liveness)" = 200 ] && break; sleep 1; done
+
+          test "$(docker exec app id -u)" = 1000
+          test "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' app)" = true
+          test "$(docker exec app printenv NODE_ENV)" = production
+          if docker exec app printenv E2E_TEST_MODE; then exit 1; fi
+          applied=$(docker exec db psql -U postgres -tAc "select count(*) from _prisma_migrations where finished_at is not null")
+          test "$applied" = "$(ls -d prisma/migrations/*/ | wc -l)"
+          test "$(status /ops/health/liveness)" = 200
+          test "$(status /ops/health/readiness)" = 200
+
+          # Traefik terminates TLS: an https Origin matching the forwarded proto
+          # and host must get past the auth Origin gate, which answers 400.
+          auth=$(status /auth/email/initiate POST \
+            '{"Host":"four.example","X-Forwarded-Proto":"https","Origin":"https://four.example","Content-Type":"application/x-www-form-urlencoded"}')
+          echo "POST /auth/email/initiate: $auth"
+          test "$auth" != 400 && test "$auth" -lt 500
+      - name: Show container logs
+        if: always()
+        run: docker logs app || true
+
+  release-please:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+
+  publish:
+    needs: [build, release-please]
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/activescott/four-in-a-row
+          tags: type=raw,value=${{ needs.release-please.outputs.version }}
+      - id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+      - name: Record digest
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: echo "ghcr.io/activescott/four-in-a-row:$VERSION@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
