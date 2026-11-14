@@ -48,7 +48,7 @@ model Game {
   moveCount       Int        @default(0) @map("move_count") // optimistic concurrency
   playerOneSeenAt DateTime?  @map("player_one_seen_at") // presence for R6
   playerTwoSeenAt DateTime?  @map("player_two_seen_at")
-  rematchOfId     String?    @map("rematch_of_id")
+  rematchOfId     String?    @unique @map("rematch_of_id") // one rematch per game
   createdAt       DateTime   @default(now()) @map("created_at")
   finishedAt      DateTime?  @map("finished_at")
   moves           Move[]

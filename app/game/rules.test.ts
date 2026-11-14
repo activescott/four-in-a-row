@@ -254,6 +254,34 @@ describe("outcome", () => {
     const o = outcome(board, { row: ROWS - 1, column: COLUMNS - 1 });
     expect(o).toEqual({ status: "draw" });
   });
+
+  it("reports a win, not a draw, when the 42nd move fills the board and wins", () => {
+    // Player 2's last disc, in the top right corner, completes a falling
+    // diagonal; no earlier move wins.
+    const columns = [
+      0, 0, 6, 4, 3, 2, 1, 1, 5, 4, 3, 3, 0, 1, 4, 0, 2, 4, 0, 5, 4, 3, 3, 1, 1,
+      5, 5, 1, 3, 2, 2, 2, 6, 5, 2, 6, 6, 4, 0, 6, 5, 6,
+    ];
+    expect(columns).toHaveLength(ROWS * COLUMNS);
+    const before = boardFromMoves(columns.slice(0, -1));
+    if (!before.ok) throw new Error("replay failed");
+    expect(hasAnyFour(before.board)).toBe(false);
+
+    const replay = boardFromMoves(columns);
+    if (!replay.ok) throw new Error("replay failed");
+    expect(replay.board.every((r) => r.every((c) => c !== null))).toBe(true);
+    expect(replay.lastMove).toEqual({ row: 5, column: 6, player: 2 });
+    expect(outcome(replay.board, replay.lastMove!)).toEqual({
+      status: "win",
+      player: 2,
+      cells: [
+        { row: 5, column: 6 },
+        { row: 4, column: 5 },
+        { row: 3, column: 4 },
+        { row: 2, column: 3 },
+      ],
+    });
+  });
 });
 
 /** Build a board from bottom-up rows of 0/1/2 (0 = empty). */

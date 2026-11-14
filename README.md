@@ -14,6 +14,12 @@ npm run dev           # PGlite database in ./pglite-data, migrated at startup
 npm test              # each test file gets a fresh in-memory PGlite database
 ```
 
+To try a game before invites exist, stop the dev server and seed two players and a game between them, then sign in as each player (in two browsers) and open `/games`:
+
+```sh
+node scripts/seed-game.mts first@example.com second@example.com
+```
+
 With `DATABASE_URL` set, the app uses Postgres instead of PGlite. Health checks are at `/ops/health/liveness` (liveness) and `/ops/health/readiness` (readiness, with `db.size` in bytes).
 
 ## Sign-in
