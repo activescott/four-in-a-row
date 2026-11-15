@@ -5,6 +5,8 @@ import type { Cell } from "./rules";
 // Live updates (R5): the board page polls /games/:id/state?since=n while the
 // tab is visible. 1.5 s plus a round trip stays inside the 3 s budget.
 export const POLL_INTERVAL_MS = 1500;
+// A fetch can stay pending for minutes on a phone that changes networks.
+export const POLL_TIMEOUT_MS = 5000;
 
 type VisibilitySource = Pick<
   Document,
@@ -13,20 +15,22 @@ type VisibilitySource = Pick<
 
 /**
  * Calls `poll` every `intervalMs` while `doc` is visible, one call at a time.
- * Stops while hidden and polls at once when visible again. Returns a stop
- * function.
+ * Stops while hidden and polls at once when visible again. Each call's signal
+ * aborts after `timeoutMs`, or when stopped. Returns a stop function.
  */
 export function startPolling({
   poll,
   doc,
   intervalMs,
+  timeoutMs = POLL_TIMEOUT_MS,
 }: {
-  poll: () => Promise<void>;
+  poll: (signal: AbortSignal) => Promise<void>;
   doc: VisibilitySource;
   intervalMs: number;
+  timeoutMs?: number;
 }) {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let inFlight = false;
+  let inFlight: AbortController | undefined;
   let stopped = false;
   const visible = () => doc.visibilityState === "visible";
 
@@ -42,13 +46,16 @@ export function startPolling({
   async function tick() {
     timer = undefined;
     if (stopped || !visible() || inFlight) return;
-    inFlight = true;
+    const controller = new AbortController();
+    inFlight = controller;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      await poll();
+      await poll(controller.signal);
     } catch {
-      // Offline or a deploy in progress: try again on the next tick.
+      // Offline, timed out or a deploy in progress: try again next tick.
     } finally {
-      inFlight = false;
+      clearTimeout(timeout);
+      inFlight = undefined;
     }
     schedule();
   }
@@ -62,6 +69,7 @@ export function startPolling({
   return () => {
     stopped = true;
     cancel();
+    inFlight?.abort();
     doc.removeEventListener("visibilitychange", onVisibilityChange);
   };
 }
@@ -141,10 +149,11 @@ export function useLiveGame(loaded: GameState): {
     return startPolling({
       doc: document,
       intervalMs: POLL_INTERVAL_MS,
-      poll: async () => {
+      poll: async (signal) => {
         const { id, moveCount } = latest.current;
         const response = await fetch(`/games/${id}/state?since=${moveCount}`, {
           headers: { accept: "application/json" },
+          signal,
         });
         const update = await readPoll(response);
         if (update === null) return;
