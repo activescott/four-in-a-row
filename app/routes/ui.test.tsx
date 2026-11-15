@@ -65,6 +65,48 @@ test("a new board has no last-move line or marker", () => {
   expect(html).not.toContain("Last move");
 });
 
+test("the turn heading is short and the legend uses the short name", () => {
+  const html = render("/games/:id", Board, { game: state(), emails });
+  expect(html).toContain("Your turn");
+  expect(html).not.toContain("you are red");
+  expect(html).toContain("bob");
+  expect(html).not.toContain("bob@example.com");
+});
+
+test("the board names who it is waiting for and their colour", () => {
+  const html = render("/games/:id", Board, {
+    game: state({ yourTurn: false }),
+    emails,
+  });
+  expect(html.replace(/<!-- -->/g, "")).toContain("Waiting for bob (yellow).");
+});
+
+test("the last-move dot is 16 pt", () => {
+  const html = render("/games/:id", Board, { game: state(), emails });
+  expect(html).toMatch(/aria-label="Last move"[^>]*class="size-4 /);
+});
+
+test("after a win the other discs get a lighter tint, never an opacity fade", () => {
+  const board = emptyBoard().map((r) => [...r]);
+  board[0]![0] = 1;
+  board[0]![1] = 2;
+  board[1]![1] = 2;
+  const html = render("/games/:id", Board, {
+    game: state({
+      board,
+      status: "WON",
+      result: "lost",
+      yourTurn: false,
+      winningCells: [{ row: 1, column: 1 }],
+      lastMove: null,
+    }),
+    emails,
+  });
+  expect(html).not.toContain("opacity-");
+  expect(html).toContain("bg-red-300");
+  expect(html).toContain("bg-amber-200");
+});
+
 const row = (id: string, opponent: string, yourTurn: boolean) => ({
   id,
   status: "ACTIVE",

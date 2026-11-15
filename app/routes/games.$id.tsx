@@ -33,6 +33,13 @@ export function shouldRevalidate() {
 }
 
 const DISC: Record<Player, string> = { 1: "bg-red-600", 2: "bg-amber-400" };
+// Game over: discs outside the winning four get a lighter tint of their own
+// colour. Fading with opacity over the navy board turns yellow brown and red
+// nearly invisible.
+const DISC_DIM: Record<Player, string> = {
+  1: "bg-red-300",
+  2: "bg-amber-200",
+};
 // Marks drawn on a disc: dark on yellow, white on red, so both stay legible.
 const INK: Record<Player, string> = { 1: "text-white", 2: "text-slate-900" };
 const INK_BG: Record<Player, string> = { 1: "bg-white", 2: "bg-slate-900" };
@@ -88,7 +95,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           className={`size-6 shrink-0 rounded-full ${DISC[game.you]}`}
           aria-hidden="true"
         />
-        Your turn, you are {COLOUR[game.you]}.
+        Your turn
       </>
     );
   } else if (!emails[opponent]) status = "Waiting for your opponent to join.";
@@ -131,7 +138,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
 
       <div className="flex flex-col gap-1 text-slate-800">
         {legend(game.you, `You are ${COLOUR[game.you]}`)}
-        {legend(opponent, emails[opponent] ?? "Invited player")}
+        {legend(opponent, opponentName)}
       </div>
 
       <div>
@@ -172,10 +179,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
                 const cell = game.board[row]![column];
                 const isWin = winning.has(`${row}:${column}`);
                 const isLast = last?.row === row && last.column === column;
-                const fade =
-                  cell && game.winningCells.length > 0 && !isWin
-                    ? " opacity-50"
-                    : "";
+                const dim = game.winningCells.length > 0 && !isWin;
                 const ring =
                   isWin && cell
                     ? ` ring-4 ring-inset ${cell === 1 ? "ring-white" : "ring-slate-900"}`
@@ -184,15 +188,15 @@ export default function Board({ loaderData }: Route.ComponentProps) {
                   <span
                     key={row}
                     className={`flex aspect-square w-full items-center justify-center rounded-full ${
-                      cell ? DISC[cell] : "bg-white"
-                    }${ring}${fade}`}
+                      cell ? (dim ? DISC_DIM[cell] : DISC[cell]) : "bg-white"
+                    }${ring}`}
                   >
                     {cell && isWin && <Star className={INK[cell]} />}
                     {cell && isLast && !isWin && (
                       <span
                         role="img"
                         aria-label="Last move"
-                        className={`size-3 rounded-full ${INK_BG[cell]}`}
+                        className={`size-4 rounded-full ${INK_BG[cell]}`}
                       />
                     )}
                   </span>
