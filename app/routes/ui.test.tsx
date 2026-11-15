@@ -196,6 +196,14 @@ test("every legend swatch grows from the sm breakpoint so the yellow centre show
   }
 });
 
+test("the legend rows get extra vertical gap from sm so the mover's 4px ring clears the other swatch", () => {
+  const html = render("/games/:id", Board, { game: state(), emails });
+  const rows = legendOf(html).match(/<div[^>]*gap-1[^>]*>/g) ?? [];
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toContain("gap-1");
+  expect(rows[0]).toContain("sm:gap-y-1.5");
+});
+
 test("the last-move mark is a filled dot, not a ring that could be read as part of the yellow ring", () => {
   const html = render("/games/:id", Board, { game: state(), emails });
   const mark = (html.match(/<span[^>]*data-last-move[^>]*>/g) ?? [])[0];
