@@ -61,6 +61,9 @@ jobs:
           test "$applied" = "$(ls -d prisma/migrations/*/ | wc -l)"
           test "$(status /ops/health/liveness)" = 200
           test "$(status /ops/health/readiness)" = 200
+          # Without E2E_TEST_MODE the captured-email readback does not exist,
+          # even for a request carrying the header.
+          test "$(status '/e2e/captured-email?email=a%40example.com' GET '{"x-e2e-secret":"guess"}')" = 404
 
           # Traefik terminates TLS: an https Origin matching the forwarded proto
           # and host must get past the auth Origin gate, which answers 400.

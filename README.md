@@ -20,6 +20,14 @@ To start a game, sign in and enter the other player's email under "New game" on 
 node scripts/seed-game.mts first@example.com second@example.com
 ```
 
+The end-to-end test (`e2e/full-game.spec.mts`) signs two players in by email link, has one invite the other, and plays a game to a win, in mobile WebKit (iPhone 13), desktop Chromium and desktop Firefox. Playwright starts the production build with `E2E_TEST_MODE`, so build first:
+
+```sh
+npm run build
+npx playwright install --with-deps   # once
+npx playwright test                  # or --project=desktop-chromium
+```
+
 With `DATABASE_URL` set, the app uses Postgres instead of PGlite. Health checks are at `/ops/health/liveness` (liveness) and `/ops/health/readiness` (readiness, with `db.size` in bytes).
 
 ## Sign-in
