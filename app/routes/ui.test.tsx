@@ -5,6 +5,7 @@ import type { GameState } from "../game/games.server";
 import { emptyBoard } from "../game/rules";
 import Board from "./games.$id";
 import Games from "./games";
+import Invite from "./invite.$key";
 
 // Renders a route component the way React Router would with this loader data.
 function render(path: string, Component: unknown, loaderData: unknown) {
@@ -132,4 +133,40 @@ test("your-turn rows are highlighted", () => {
     ],
   });
   expect(html.match(/border-l-4/g)).toHaveLength(1);
+});
+
+test("the game list has a New game form taking the opponent's email", () => {
+  const html = render("/games", Games, { games: [] });
+  expect(html).toContain(">New game</h2>");
+  expect(html).toMatch(/<form method="post"[^>]*>/);
+  expect(html).toMatch(
+    /<input[^>]*id="invite-email"[^>]*name="email"[^>]*type="email"[^>]*required/,
+  );
+  expect(html).toMatch(/<label for="invite-email"[^>]*>Your opponent/);
+  expect(html).toMatch(
+    /<button type="submit"[^>]*class="[^"]*min-h-11[^"]*"[^>]*>Invite<\/button>/,
+  );
+});
+
+test("the invite page offers the invited address an email sign-in back to the game", () => {
+  const html = render("/invite/:id", Invite, {
+    state: "pending",
+    inviter: "alice",
+    email: "bob@example.com",
+    redirectTo: "/invite/g1",
+    sent: false,
+    error: null,
+    formToken: "t",
+  });
+  expect(html).toMatch(/alice(<!-- -->)? invited you to play Four in a Row/);
+  expect(html).toMatch(
+    /<form[^>]*action="\/auth\/email\/initiate" method="post"/,
+  );
+  expect(html).toMatch(/name="email" value="bob@example.com"/);
+  expect(html).toMatch(/name="redirectTo" value="\/invite\/g1"/);
+});
+
+test("an expired invite page says so", () => {
+  const html = render("/invite/:id", Invite, { state: "expired" });
+  expect(html).toContain("This invite has expired");
 });
