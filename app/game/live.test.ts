@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { GameState, StateUpdate } from "./games.server";
-import { applyUpdate, startPolling } from "./live";
+import { applyUpdate, readPoll, startPolling } from "./live";
 import { emptyBoard } from "./rules";
 
 // A stand-in for `document`: its visibility can be flipped, and it fires
@@ -163,4 +163,32 @@ test("keeps the state when nothing changed or the answer is out of date", () => 
     moves: [{ number: 3, row: 0, column: 0, player: 1 }],
   });
   expect(applyUpdate(current, gap)).toBe(current);
+});
+
+// A fetch Response as the browser hands it over. `redirected` can't be set
+// through the constructor.
+function reply(body: BodyInit | null, init: ResponseInit, redirected = false) {
+  const response = new Response(body, init);
+  Object.defineProperty(response, "redirected", { value: redirected });
+  return response;
+}
+
+test("reads a poll's answer, and stops on a lost game or an expired session", async () => {
+  const json = { "content-type": "application/json" };
+  const body = update();
+  expect(
+    await readPoll(reply(JSON.stringify(body), { status: 200, headers: json })),
+  ).toEqual(body);
+
+  // The game is gone, or the player can no longer see it.
+  expect(await readPoll(reply("Not found", { status: 404 }))).toBe("gone");
+  // requireAuth redirects to /login; fetch follows it to an HTML page.
+  const login = { status: 200, headers: { "content-type": "text/html" } };
+  expect(await readPoll(reply("<html>", login, true))).toBe("signed_out");
+  expect(await readPoll(reply("<html>", login))).toBe("signed_out");
+  expect(await readPoll(reply(null, { status: 401 }))).toBe("signed_out");
+  expect(await readPoll(reply(null, { status: 403 }))).toBe("signed_out");
+
+  // A deploy in progress or a server error: try again next time.
+  expect(await readPoll(reply("Bad gateway", { status: 502 }))).toBeNull();
 });
