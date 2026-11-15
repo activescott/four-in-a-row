@@ -286,3 +286,88 @@ test("onVerified does not log a sign-in for a link to the signed-in account", as
 
   expect(capture.events("auth.signin.succeeded")).toEqual([]);
 });
+
+// What the verify hands onVerified for an address with no identity yet: the
+// user store's row (createdNow when the verify inserted it) and the identity
+// the library then created for it.
+async function verifiedNewUser(email: string, { createdNow = true } = {}) {
+  const row = await db.user.upsert({
+    where: { email },
+    create: { email },
+    update: {},
+  });
+  const identity = await db.identity.create({
+    data: { userId: row.id, provider: "email", identifier: email },
+  });
+  return {
+    ...attempt(email),
+    user: {
+      id: row.id,
+      metadata: { email, ...(createdNow && { createdNow }) },
+    },
+    identity: { ...identity, providerState: {} },
+    isNewUser: true,
+  };
+}
+
+test("onVerified refuses a new account for an address with no invite and deletes what the verify created", async () => {
+  const { gate: open, capture } = gate("seed@example.com");
+  const input = await verifiedNewUser("guessed@example.com");
+
+  const decision = await open.onVerified!(input);
+
+  expect(decision).toEqual({
+    error: expect.objectContaining({ code: "INVALID_CREDENTIALS" }),
+  });
+  expect(await db.user.count({ where: { id: input.user.id } })).toBe(0);
+  expect(
+    await db.identity.count({ where: { identifier: "guessed@example.com" } }),
+  ).toBe(0);
+  expect(capture.events("auth.signin.failed")).toMatchObject([
+    { provider: "email", reason: "not_invited" },
+  ]);
+  expect(capture.events("auth.signin.succeeded")).toEqual([]);
+  expect(JSON.stringify(capture.lines)).not.toContain("guessed@example.com");
+});
+
+test("onVerified allows a new account for an address with a pending invite", async () => {
+  const inviter = await db.user.create({
+    data: { email: "inviter4@example.com" },
+  });
+  const game = await db.game.create({
+    data: { playerOneId: inviter.id, status: "INVITED" },
+  });
+  await db.invite.create({
+    data: {
+      gameId: game.id,
+      inviterId: inviter.id,
+      email: "New-Invitee@Example.com",
+      tokenHash: "hash-new-invitee",
+      expiresAt: new Date(Date.now() + 60_000),
+    },
+  });
+  const input = await verifiedNewUser("new-invitee@example.com");
+
+  expect(await gate().gate.onVerified!(input)).toBe("allow");
+  expect(await db.user.count({ where: { id: input.user.id } })).toBe(1);
+});
+
+test("onVerified allows a new account for an address in SIGNUP_EMAILS", async () => {
+  const input = await verifiedNewUser("new-seed@example.com");
+
+  expect(await gate("new-seed@example.com").gate.onVerified!(input)).toBe(
+    "allow",
+  );
+  expect(await db.user.count({ where: { id: input.user.id } })).toBe(1);
+});
+
+// An account whose email identity is missing gets isNewUser too, but the
+// verify did not create its row, so it is neither refused nor deleted.
+test("onVerified allows an account the verify did not create", async () => {
+  const input = await verifiedNewUser("identity-less@example.com", {
+    createdNow: false,
+  });
+
+  expect(await gate().gate.onVerified!(input)).toBe("allow");
+  expect(await db.user.count({ where: { id: input.user.id } })).toBe(1);
+});

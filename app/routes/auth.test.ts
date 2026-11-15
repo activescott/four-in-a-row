@@ -338,6 +338,54 @@ test("a wrong code is refused and logs auth.signin.failed", async () => {
   );
 });
 
+// The library stores a live code for every initiate, a refused address's
+// too (#43), so the gate must refuse the account at verify. Here the address
+// was invited when the code went out and the invite has lapsed since, which
+// gives the test a correct code for an address the gate no longer allows.
+test("a correct code for an address the gate does not allow is refused and leaves no account", async () => {
+  const email = "lapsed-invitee@example.com";
+  const inviter = await db.user.create({
+    data: { email: "lapsed-inviter@example.com" },
+  });
+  const game = await db.game.create({
+    data: { playerOneId: inviter.id, status: "INVITED" },
+  });
+  const invite = await db.invite.create({
+    data: {
+      gameId: game.id,
+      inviterId: inviter.id,
+      email,
+      tokenHash: "hash-lapsed",
+      expiresAt: new Date(Date.now() + 60_000),
+    },
+  });
+  const jar = new CookieJar();
+  await requestEmail(jar, email);
+  const { code } = await (await readCapturedEmail(email)).json();
+  await db.invite.update({
+    where: { id: invite.id },
+    data: { expiresAt: new Date(Date.now() - 1) },
+  });
+
+  const response = await auth(
+    formPost(
+      "/auth/email/verify",
+      { code },
+      { cookie: jar.header(), referer: "/login" },
+    ),
+  );
+
+  expect(response.status).toBe(302);
+  expect(response.headers.get("location")).toMatch(
+    /^\/login\?error=INVALID_CREDENTIALS/,
+  );
+  expect(response.headers.getSetCookie().join()).not.toMatch(
+    /(^|, )session=[^;]/,
+  );
+  expect(await db.user.count({ where: { email } })).toBe(0);
+  expect(await db.identity.count({ where: { identifier: email } })).toBe(0);
+});
+
 test("logout clears the session", async () => {
   const email = await member("logout@example.com");
   const { jar } = await signIn(email, "/profile");
