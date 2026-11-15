@@ -118,17 +118,20 @@ test("after a win only the winning four are starred and the other discs stay dra
 });
 
 // Red four in column 1, yellow discs beside them. You are red unless said.
-function finishedBoard(result: "won" | "lost") {
+function finishedBoard(result: "won" | "lost" | "draw") {
   const board = emptyBoard().map((r) => [...r]);
   for (let r = 0; r < 4; r++) board[r]![0] = 1;
   for (let r = 0; r < 3; r++) board[r]![1] = 2;
   return render("/games/:id", Board, {
     game: state({
       board,
-      status: "WON",
+      status: result === "draw" ? "DRAW" : "WON",
       result,
       yourTurn: false,
-      winningCells: [0, 1, 2, 3].map((row) => ({ row, column: 0 })),
+      winningCells:
+        result === "draw"
+          ? []
+          : [0, 1, 2, 3].map((row) => ({ row, column: 0 })),
       lastMove: null,
     }),
     emails,
@@ -142,16 +145,55 @@ test("yellow discs carry a shape mark and red ones do not, so colour is not the 
   expect(html.match(/data-yellow-mark/g)).toHaveLength(4); // and the legend swatch
 });
 
-test("the winning four carry a dark outer ring as well as the white one", () => {
+test("the winning four carry the white and dark rings, and nothing else does", () => {
   const html = finishedBoard("won");
-  expect(html.match(/data-win-ring/g)).toHaveLength(4);
+  const ring = "shadow-[inset_0_0_0_4px_#fff,inset_0_0_0_7px_#0f172a]";
+  const cells = html.match(/<span[^>]*data-win-ring[^>]*>/g) ?? [];
+  expect(cells).toHaveLength(4);
+  for (const cell of cells) expect(cell).toContain(ring);
+  expect(html.split(ring)).toHaveLength(5);
 });
 
+const legendOf = (html: string) => html.slice(0, html.indexOf("<form"));
+const swatches = (html: string) =>
+  legendOf(html).match(/<span[^>]*rounded-full[^>]*>/g) ?? [];
+
 test("the legend swatch of the losing player is tinted like their discs on the board", () => {
-  const html = finishedBoard("lost");
-  const legend = html.slice(0, html.indexOf("<form"));
+  const legend = legendOf(finishedBoard("lost"));
   expect(legend).toContain("bg-red-300");
   expect(legend).not.toContain("bg-red-600");
+  expect(legend).toContain("bg-amber-400");
+});
+
+test("a yellow loser gets a tinted yellow swatch and red stays saturated", () => {
+  const legend = legendOf(finishedBoard("won"));
+  expect(legend).toContain("bg-amber-200");
+  expect(legend).not.toContain("bg-amber-400");
+  expect(legend).toContain("bg-red-600");
+});
+
+test("a draw has no loser, so both legend swatches stay saturated", () => {
+  const legend = legendOf(finishedBoard("draw"));
+  expect(legend).toContain("bg-red-600");
+  expect(legend).toContain("bg-amber-400");
+  expect(legend).not.toContain("bg-red-300");
+  expect(legend).not.toContain("bg-amber-200");
+});
+
+test("every legend swatch has a slate border so a tinted one still shows on the page", () => {
+  for (const html of [finishedBoard("won"), finishedBoard("lost")]) {
+    const found = swatches(html);
+    expect(found).toHaveLength(2);
+    for (const swatch of found)
+      expect(swatch).toContain("border border-slate-500");
+  }
+});
+
+test("the last-move mark is a filled dot, not a ring that could be read as part of the yellow ring", () => {
+  const html = render("/games/:id", Board, { game: state(), emails });
+  const mark = (html.match(/<span[^>]*data-last-move[^>]*>/g) ?? [])[0];
+  expect(mark).toContain("bg-current");
+  expect(mark).not.toContain("border");
 });
 
 const invitedBoard = (overrides: Partial<GameState> = {}) =>
