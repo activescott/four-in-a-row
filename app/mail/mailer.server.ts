@@ -33,7 +33,7 @@ export function createSmtpMailer({
   logger?: Logger;
 }): Mailer {
   return {
-    async send({ kind, to, replyTo, subject, text, html }) {
+    async send({ kind, to, replyTo, subject, text, html, link }) {
       try {
         await transport.sendMail({
           from: { name: APP_NAME, address: from },
@@ -45,27 +45,74 @@ export function createSmtpMailer({
         });
         return true;
       } catch (error) {
-        // Why the relay refused. Never the link, code, body or address: the
-        // link and code sign someone in.
-        const { code, responseCode, command, message } = (error ??
-          {}) as Record<string, unknown>;
-        logger.error({
-          event: "email.send.failed",
-          kind,
-          code,
-          responseCode,
-          command,
-          // Relays often echo the recipient in their refusal.
-          message: String(message ?? "").replaceAll(
-            new RegExp(escapeRegExp(to), "gi"),
-            "[recipient]",
-          ),
-        });
+        logRelayError(logger, kind, error, { to, link });
         return false;
       }
     },
   };
 }
+
+// Why the relay refused. Never the body or the address: the link and code sign
+// someone in. Logging must not change the answer, so nothing here may throw.
+function logRelayError(
+  logger: Logger,
+  kind: MailKind,
+  error: unknown,
+  mail: { to: string; link: string },
+) {
+  try {
+    const { code, responseCode, command, message } = (error ?? {}) as Record<
+      string,
+      unknown
+    >;
+    logger.error({
+      event: "email.send.failed",
+      kind,
+      ...(typeof code === "string" && { code }),
+      ...(typeof responseCode === "number" && { responseCode }),
+      ...(typeof command === "string" && { command }),
+      message: scrubRelayMessage(messageText(message), mail),
+    });
+  } catch {
+    // A broken logger or a hostile error is not worth failing the send for.
+  }
+}
+
+function messageText(message: unknown) {
+  try {
+    return String(message ?? "");
+  } catch {
+    return "";
+  }
+}
+
+// Relays echo what they were given, so strip everything that could sign
+// someone in or name them: the link, any URL, anything address-shaped, the
+// recipient's bare name, and runs of 4+ digits (the code). What is left is the
+// relay's reason, first line only.
+function scrubRelayMessage(
+  message: string,
+  { to, link }: { to: string; link: string },
+) {
+  const localPart = to.split("@")[0] ?? "";
+  let scrubbed = message;
+  for (const literal of [link, to]) {
+    if (literal) scrubbed = scrubbed.replaceAll(literal, REDACTED);
+  }
+  scrubbed = scrubbed
+    .replace(/https?:\/\/\S+/gi, REDACTED)
+    .replace(/[^\s<>"'()[\],;]*@[^\s<>"'()[\],;]*/g, REDACTED)
+    .replace(/\d{4,}/g, REDACTED);
+  if (localPart) {
+    scrubbed = scrubbed.replace(
+      new RegExp(`(?<![\\w.+-])${escapeRegExp(localPart)}(?![\\w.+-])`, "gi"),
+      REDACTED,
+    );
+  }
+  return (scrubbed.split(/\r?\n/)[0] ?? "").trim().slice(0, 200);
+}
+
+const REDACTED = "[redacted]";
 
 function escapeRegExp(text: string) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
