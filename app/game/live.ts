@@ -96,6 +96,14 @@ export function applyUpdate(state: GameState, update: StateUpdate): GameState {
   };
 }
 
+/**
+ * Whether the game can still change. A finished game's moves can't, and a
+ * rematch is a new game with its own page, so it isn't polled.
+ */
+export function isLive(state: GameState) {
+  return state.status === "ACTIVE" || state.status === "INVITED";
+}
+
 /** Why polling stopped: the game is gone, or the session expired. */
 export type PollEnd = "gone" | "signed_out";
 
@@ -143,7 +151,7 @@ export function useLiveGame(loaded: GameState): {
     latest.current = live;
   });
 
-  const polling = ended === null;
+  const polling = ended === null && isLive(live);
   useEffect(() => {
     if (!polling) return;
     return startPolling({
