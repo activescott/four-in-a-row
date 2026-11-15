@@ -117,6 +117,43 @@ test("after a win only the winning four are starred and the other discs stay dra
   expect(html).toContain("You lost.");
 });
 
+// Red four in column 1, yellow discs beside them. You are red unless said.
+function finishedBoard(result: "won" | "lost") {
+  const board = emptyBoard().map((r) => [...r]);
+  for (let r = 0; r < 4; r++) board[r]![0] = 1;
+  for (let r = 0; r < 3; r++) board[r]![1] = 2;
+  return render("/games/:id", Board, {
+    game: state({
+      board,
+      status: "WON",
+      result,
+      yourTurn: false,
+      winningCells: [0, 1, 2, 3].map((row) => ({ row, column: 0 })),
+      lastMove: null,
+    }),
+    emails,
+  });
+}
+
+test("yellow discs carry a shape mark and red ones do not, so colour is not the only cue", () => {
+  const html = finishedBoard("won");
+  const grid = html.slice(html.indexOf("<form"));
+  expect(grid.match(/data-yellow-mark/g)).toHaveLength(3);
+  expect(html.match(/data-yellow-mark/g)).toHaveLength(4); // and the legend swatch
+});
+
+test("the winning four carry a dark outer ring as well as the white one", () => {
+  const html = finishedBoard("won");
+  expect(html.match(/data-win-ring/g)).toHaveLength(4);
+});
+
+test("the legend swatch of the losing player is tinted like their discs on the board", () => {
+  const html = finishedBoard("lost");
+  const legend = html.slice(0, html.indexOf("<form"));
+  expect(legend).toContain("bg-red-300");
+  expect(legend).not.toContain("bg-red-600");
+});
+
 const invitedBoard = (overrides: Partial<GameState> = {}) =>
   render("/games/:id", Board, {
     game: state({
