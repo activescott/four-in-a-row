@@ -1,5 +1,7 @@
 import nodemailer, { type SendMailOptions } from "nodemailer";
 import { expect, test } from "vitest";
+import { createLogger, type Logger } from "../logger.server";
+import { logCapture } from "../test/routes";
 import { CaptureMailer, createSmtpMailer, type Mail } from "./mailer.server";
 
 const mail: Mail = {
@@ -56,6 +58,177 @@ test("the SMTP mailer answers false instead of throwing when the send fails", as
   expect(await mailer.send(mail)).toBe(false);
 });
 
+test("the SMTP mailer logs why the relay refused, without the link, code, body or full address", async () => {
+  const transport = nodemailer.createTransport({ jsonTransport: true });
+  transport.sendMail = (async () => {
+    throw Object.assign(
+      new Error("550 5.7.1 <B@example.com>: Relay access denied"),
+      {
+        code: "EENVELOPE",
+        responseCode: 550,
+        command: "RCPT TO",
+      },
+    );
+  }) as typeof transport.sendMail;
+  const log = logCapture();
+  const mailer = createSmtpMailer({
+    transport,
+    from: "noreply@example.com",
+    logger: createLogger(log.destination),
+  });
+
+  const signin = {
+    ...mail,
+    kind: "signin" as const,
+    text: "Your code is 482913",
+    link: "https://app.example/verify?token=secret-token",
+  };
+  expect(await mailer.send(signin)).toBe(false);
+
+  expect(log.events("email.send.failed")).toEqual([
+    expect.objectContaining({
+      event: "email.send.failed",
+      kind: "signin",
+      code: "EENVELOPE",
+      responseCode: 550,
+      command: "RCPT TO",
+      message: "550 5.7.1 <[redacted]>: Relay access denied",
+    }),
+  ]);
+  const logged = JSON.stringify(log.lines);
+  expect(logged).not.toContain("secret-token");
+  expect(logged).not.toContain("482913");
+  expect(logged).not.toContain("b@example.com");
+});
+
+async function failWith(
+  error: unknown,
+  to = "b@example.com",
+  link = "https://app.example/verify?token=secret-token",
+) {
+  const transport = nodemailer.createTransport({ jsonTransport: true });
+  transport.sendMail = (async () => {
+    throw error;
+  }) as typeof transport.sendMail;
+  const log = logCapture();
+  const mailer = createSmtpMailer({
+    transport,
+    from: "noreply@example.com",
+    logger: createLogger(log.destination),
+  });
+  const result = await mailer.send({ ...mail, kind: "signin", to, link });
+  return { result, events: log.events("email.send.failed"), log };
+}
+
+test("the logged relay message is scrubbed of the link, URLs, addresses and digit runs", async () => {
+  const link = "https://app.example/verify?token=secret-token";
+  const relay = [
+    `550 denied ${link} again`,
+    "see http://other.example/x?t=abc123def for help",
+    "code 482913",
+    "for B@EXAMPLE.COM",
+    'for "Bee" <b@example.com>',
+    "for [b@example.com]",
+    "for user b",
+    "for a+b@x.com",
+    "plus someone.else@elsewhere.org",
+  ].join(" ");
+  const { result, events } = await failWith(
+    new Error(relay),
+    "b@example.com",
+    link,
+  );
+
+  expect(result).toBe(false);
+  const message = String((events[0] as { message: unknown }).message);
+  for (const secret of [
+    "secret-token",
+    "app.example",
+    "other.example",
+    "abc123def",
+    "482913",
+    "example.com",
+    "EXAMPLE",
+    "a+b",
+    "x.com",
+    "elsewhere",
+    "someone",
+  ]) {
+    expect(message).not.toContain(secret);
+  }
+  expect(message).not.toMatch(/\bb\b/);
+});
+
+test("the logged relay message stays readable and is one line of at most 200 characters", async () => {
+  const plain = await failWith(new Error("550 5.7.1 Relay access denied"));
+  expect(plain.events[0]).toMatchObject({
+    message: "550 5.7.1 Relay access denied",
+  });
+
+  const long = await failWith(
+    new Error(`Relay access denied\nsecond line\n${"x".repeat(500)}`),
+  );
+  expect(long.events[0]).toMatchObject({ message: "Relay access denied" });
+
+  const huge = await failWith(new Error("y".repeat(500)));
+  expect(String((huge.events[0] as { message: unknown }).message)).toHaveLength(
+    200,
+  );
+});
+
+test("only a string code and command and a number responseCode are logged", async () => {
+  const { events } = await failWith(
+    Object.assign(new Error("nope"), {
+      code: { secret: "a" },
+      command: 5,
+      responseCode: "550",
+    }),
+  );
+  expect(events[0]).not.toHaveProperty("code");
+  expect(events[0]).not.toHaveProperty("command");
+  expect(events[0]).not.toHaveProperty("responseCode");
+});
+
+test.each([
+  [null],
+  [undefined],
+  ["boom"],
+  [42],
+  [{ message: { toString: 1 } }],
+])(
+  "send answers false and logs once when the relay throws %j",
+  async (thrown) => {
+    const { result, events } = await failWith(thrown);
+    expect(result).toBe(false);
+    expect(events).toHaveLength(1);
+  },
+);
+
+test("send answers false when the message cannot be turned into a string", async () => {
+  const hostile = { message: Object.create(null) };
+  const { result } = await failWith(hostile);
+  expect(result).toBe(false);
+});
+
+test("send answers false when the logger itself throws", async () => {
+  const transport = nodemailer.createTransport({ jsonTransport: true });
+  transport.sendMail = (async () => {
+    throw new Error("refused");
+  }) as typeof transport.sendMail;
+  const logger = {
+    error() {
+      throw new Error("log sink down");
+    },
+  } as unknown as Logger;
+  const mailer = createSmtpMailer({
+    transport,
+    from: "noreply@example.com",
+    logger,
+  });
+
+  expect(await mailer.send(mail)).toBe(false);
+});
+
 test("the capture mailer keeps the last mail of each kind per address and sends nothing", async () => {
   const capture = new CaptureMailer();
   await capture.send(mail);
@@ -71,3 +244,23 @@ test("the capture mailer keeps the last mail of each kind per address and sends 
   expect(capture.last("c@example.com", "invite")).toBeNull();
   expect(capture.count("b@example.com", "invite")).toBe(2);
 });
+
+test.each([
+  ["letters", "a".repeat(100_000)],
+  ["digits", "7".repeat(100_000)],
+  ["at signs", "a@".repeat(50_000)],
+])(
+  "a 100 KB relay message of %s is scrubbed quickly and still logged capped",
+  async (_name, big) => {
+    const started = performance.now();
+    const { result, events } = await failWith(new Error(big));
+    const elapsed = performance.now() - started;
+
+    expect(result).toBe(false);
+    expect(elapsed).toBeLessThan(200);
+    expect(events).toHaveLength(1);
+    const message = String((events[0] as { message: unknown }).message);
+    expect(message.length).toBeGreaterThan(0);
+    expect(message.length).toBeLessThanOrEqual(200);
+  },
+);
