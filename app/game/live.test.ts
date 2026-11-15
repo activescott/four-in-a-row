@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { GameState, StateUpdate } from "./games.server";
-import { applyUpdate, readPoll, startPolling } from "./live";
+import { applyUpdate, isLive, readPoll, startPolling } from "./live";
 import { emptyBoard } from "./rules";
 
 // A stand-in for `document`: its visibility can be flipped, and it fires
@@ -220,4 +220,12 @@ test("reads a poll's answer, and stops on a lost game or an expired session", as
 
   // A deploy in progress or a server error: try again next time.
   expect(await readPoll(reply("Bad gateway", { status: 502 }))).toBeNull();
+});
+
+test("polls only a game still being played", () => {
+  expect(isLive(state({ status: "INVITED" }))).toBe(true);
+  expect(isLive(state({ status: "ACTIVE" }))).toBe(true);
+  // Nothing can change once the game ends.
+  expect(isLive(state({ status: "WON" }))).toBe(false);
+  expect(isLive(state({ status: "DRAW" }))).toBe(false);
 });
