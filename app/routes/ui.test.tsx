@@ -108,6 +108,50 @@ test("after a win the other discs get a lighter tint, never an opacity fade", ()
   expect(html).toContain("bg-amber-200");
 });
 
+const invitedBoard = (overrides: Partial<GameState> = {}) =>
+  render("/games/:id", Board, {
+    game: state({
+      status: "INVITED",
+      board: emptyBoard(),
+      moveCount: 0,
+      lastMove: null,
+      ...overrides,
+    }),
+    emails: { 1: "alice@example.com", 2: null },
+    invitedEmail: "bob@example.com",
+  });
+
+test("right after inviting, the board says who was emailed and that you can move first", () => {
+  const html = invitedBoard().replace(/<!-- -->/g, "");
+  expect(html).toMatch(
+    /<p role="status" class="[^"]*text-lg text-slate-800[^"]*"><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg><span>We emailed an invite to <strong>bob@example.com<\/strong>\. You can play your first move now\.<\/span><\/p>/,
+  );
+  expect(html).toContain("bob (invited)");
+  expect(html).not.toContain("Invited player");
+});
+
+test("once the inviter has moved, the board still says who was invited", () => {
+  const html = invitedBoard({ yourTurn: false, moveCount: 1 }).replace(
+    /<!-- -->/g,
+    "",
+  );
+  expect(html).toContain(
+    "We emailed an invite to <strong>bob@example.com</strong>.</span>",
+  );
+  expect(html).not.toContain("first move");
+});
+
+test("a game list row waiting on a join names the invited player", () => {
+  const html = render("/games", Games, {
+    games: [
+      { ...row("g1", "", false), opponent: null, invited: "bob@example.com" },
+    ],
+  }).replace(/<!-- -->/g, "");
+  expect(html).toContain("bob (invited)");
+  expect(html).toContain("Waiting for your opponent to join");
+  expect(html).not.toContain("Invited player");
+});
+
 const row = (id: string, opponent: string, yourTurn: boolean) => ({
   id,
   status: "ACTIVE",
@@ -135,7 +179,7 @@ test("your-turn rows are highlighted", () => {
   expect(html.match(/border-l-4/g)).toHaveLength(1);
 });
 
-test("the game list has a New game form taking the opponent's email", () => {
+test("the game list has a New game form asking who to play", () => {
   const html = render("/games", Games, { games: [] });
   expect(html).toContain(">New game</h2>");
   expect(html).toMatch(/<form[^>]*action="\/games" method="post"/);
@@ -143,7 +187,9 @@ test("the game list has a New game form taking the opponent's email", () => {
   expect(input).toMatch(/type="email"/);
   expect(input).toMatch(/name="email"/);
   expect(input).toMatch(/required/);
-  expect(html).toMatch(/<label for="invite-email"[^>]*>Your opponent/);
+  expect(html).toMatch(
+    /<label for="invite-email"[^>]*>Who do you want to play\? Enter their email\.<\/label>/,
+  );
   expect(html).toMatch(
     /<button type="submit"[^>]*class="[^"]*min-h-11[^"]*"[^>]*>Invite<\/button>/,
   );

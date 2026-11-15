@@ -540,6 +540,48 @@ test("the game list shows each player whose turn it is and the result", async ()
   expect((await list(await player("loner"))).body.games).toEqual([]);
 });
 
+test("the inviter's list and board show whom a waiting game's invite went to", async () => {
+  const one = await player("inviter");
+  const game = await db.game.create({
+    data: { playerOneId: one.id, status: "INVITED", nextPlayerId: one.id },
+  });
+  await db.invite.create({
+    data: {
+      gameId: game.id,
+      inviterId: one.id,
+      email: "invitee@example.com",
+      tokenHash: `hash-${game.id}`,
+      expiresAt: new Date(Date.now() + 60_000),
+    },
+  });
+
+  const list = await reply(
+    await run(games.loader, get("/games", { cookie: one.cookie })),
+  );
+  expect(list.body).toMatchObject({
+    games: [{ id: game.id, opponent: null, invited: "invitee@example.com" }],
+  });
+  const page = await reply(
+    await run(board.loader, get(`/games/${game.id}`, { cookie: one.cookie }), {
+      id: game.id,
+    }),
+  );
+  expect(page.body).toMatchObject({ invitedEmail: "invitee@example.com" });
+
+  // Once the invitee has joined, the address is no longer shown as invited.
+  const two = await player("invitee");
+  await db.game.update({
+    where: { id: game.id },
+    data: { status: "ACTIVE", playerTwoId: two.id },
+  });
+  const after = await reply(
+    await run(board.loader, get(`/games/${game.id}`, { cookie: one.cookie }), {
+      id: game.id,
+    }),
+  );
+  expect(after.body).toMatchObject({ invitedEmail: null });
+});
+
 test("a move with a missing or non-integer column is refused with 400", async () => {
   const { one, game } = await activeGame();
   const path = `/games/${game.id}/moves`;
