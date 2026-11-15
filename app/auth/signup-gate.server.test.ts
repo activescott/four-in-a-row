@@ -64,6 +64,8 @@ test("allows an address with a pending invite, matching case-insensitively", asy
       gameId: game.id,
       inviterId: inviter.id,
       email: "Invitee@Example.com",
+      tokenHash: "hash-pending",
+      expiresAt: new Date(Date.now() + 60_000),
     },
   });
 
@@ -85,6 +87,8 @@ test("refuses an address whose only invite was already accepted", async () => {
       inviterId: inviter.id,
       email: "accepted@example.com",
       acceptedAt: new Date(),
+      tokenHash: "hash-accepted",
+      expiresAt: new Date(Date.now() + 60_000),
     },
   });
 
@@ -93,6 +97,28 @@ test("refuses an address whose only invite was already accepted", async () => {
       redirect: `/login?error=${NOT_INVITED}`,
     },
   );
+});
+
+test("refuses an address whose only invite has expired", async () => {
+  const inviter = await db.user.create({
+    data: { email: "inviter3@example.com" },
+  });
+  const game = await db.game.create({
+    data: { playerOneId: inviter.id, status: "INVITED" },
+  });
+  await db.invite.create({
+    data: {
+      gameId: game.id,
+      inviterId: inviter.id,
+      email: "expired@example.com",
+      tokenHash: "hash-expired",
+      expiresAt: new Date(Date.now() - 1),
+    },
+  });
+
+  expect(await gate().gate.onInitiate(attempt("expired@example.com"))).toEqual({
+    redirect: `/login?error=${NOT_INVITED}`,
+  });
 });
 
 test("allows an address in SIGNUP_EMAILS", async () => {
