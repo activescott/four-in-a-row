@@ -154,9 +154,7 @@ test("applies new moves to the board with the turn, last move and result", () =>
 
 test("keeps the state when nothing changed or the answer is out of date", () => {
   const current = state({ moveCount: 1 });
-  expect(applyUpdate(current, { unchanged: true, moveCount: 1 })).toBe(
-    current,
-  );
+  expect(applyUpdate(current, { unchanged: true, moveCount: 1 })).toBe(current);
   // A poll sent before the page reloaded after the player's own move.
   expect(applyUpdate(current, update())).toBe(current);
   // Moves that don't follow on from this board can't be applied.

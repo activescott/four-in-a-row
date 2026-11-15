@@ -7,6 +7,7 @@ import {
   playerEmails,
 } from "../game/games.server";
 import { displayName } from "../game/display";
+import { useLiveGame } from "../game/live";
 import { COLUMNS, ROWS, type Player } from "../game/rules";
 import type { Route } from "./+types/games.$id";
 import type { action as moveAction } from "./games.$id.moves";
@@ -66,7 +67,8 @@ function Star({ className }: { className: string }) {
 }
 
 export default function Board({ loaderData }: Route.ComponentProps) {
-  const { game, emails } = loaderData;
+  const { emails } = loaderData;
+  const game = useLiveGame(loaderData.game);
   const fetcher = useFetcher<typeof moveAction>();
   const opponent: Player = game.you === 1 ? 2 : 1;
   const opponentName = displayName(emails[opponent]);
