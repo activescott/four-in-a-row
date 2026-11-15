@@ -19,11 +19,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const db = await getDb();
   const game = await findGameForPlayer(db, params.id, user.id);
   if (!game) throw new Response("Not found", { status: 404 });
-  await recordSeen(db, game, user.id);
   const body =
     since === null
       ? gameState(game, user.id)
       : stateSince(game, user.id, Number(since));
   if (!body) throw new Response("Bad request", { status: 400 });
+  await recordSeen(db, game, user.id);
   return Response.json(body, { headers: { "cache-control": "no-store" } });
 }
