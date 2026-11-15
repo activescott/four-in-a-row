@@ -109,6 +109,7 @@ test("A invites B by email and they play to a win, live on both boards", async (
   );
   await confirmSignIn(b, linkB);
   await expect(b).toHaveURL(gameUrl);
+  await expect(b.getByText("You are yellow")).toBeVisible();
 
   // From here on neither page navigates: a reload would drop these marks.
   for (const page of [a, b]) {
