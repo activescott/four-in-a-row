@@ -20,7 +20,7 @@ To start a game, sign in and enter the other player's email under "New game" on 
 node scripts/seed-game.mts first@example.com second@example.com
 ```
 
-The end-to-end test (`e2e/full-game.spec.mts`) signs two players in by email link, has one invite the other, and plays a game to a win, in mobile WebKit (iPhone 13), desktop Chromium and desktop Firefox. Playwright starts the production build with `E2E_TEST_MODE`, so build first:
+The end-to-end test (`e2e/full-game.spec.mts`) signs two players in by email link, has one invite the other, and plays a game to a win, in mobile WebKit (iPhone 13), desktop Chromium and desktop Firefox. Playwright starts the production build with `E2E_TEST_MODE` behind a local TLS proxy (`e2e/tls-proxy.mts`, which needs `openssl`), so build first:
 
 ```sh
 npm run build
