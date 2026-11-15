@@ -24,7 +24,11 @@ const pending = (now: Date) => ({ acceptedAt: null, expiresAt: { gt: now } });
 
 export type InviteError = "invalid_email" | "self" | "capped" | "not_sent";
 export type InviteOutcome =
-  { ok: true; gameId: string } | { ok: false; error: InviteError };
+  | { ok: true; gameId: string }
+  | { ok: false; error: InviteError }
+  // One pending invite per address per inviter, so one player can't fill a
+  // stranger's inbox: the game it started.
+  | { ok: false; error: "already_invited"; gameId: string };
 
 /**
  * Starts an INVITED game with the inviter to move first, and emails the
@@ -56,7 +60,13 @@ export async function createInvite(
     const count = await tx.invite.count({
       where: { inviterId, ...pending(now) },
     });
-    if (count >= MAX_PENDING_INVITES) return { capped: count } as const;
+    const existing = await tx.invite.findFirst({
+      where: { inviterId, email, ...pending(now) },
+      select: { gameId: true },
+    });
+    if (existing)
+      return { kind: "already_invited", gameId: existing.gameId } as const;
+    if (count >= MAX_PENDING_INVITES) return { kind: "capped", count } as const;
     const game = await tx.game.create({
       data: {
         playerOneId: inviterId,
@@ -73,10 +83,13 @@ export async function createInvite(
         expiresAt: new Date(now.getTime() + INVITE_TTL_MS),
       },
     });
-    return { gameId: game.id, inviteId: invite.id } as const;
+    return { kind: "created", gameId: game.id, inviteId: invite.id } as const;
   });
-  if ("capped" in created) {
-    logger.info({ event: "invite.capped", inviterId, pending: created.capped });
+  if (created.kind === "already_invited") {
+    return { ok: false, error: "already_invited", gameId: created.gameId };
+  }
+  if (created.kind === "capped") {
+    logger.info({ event: "invite.capped", inviterId, pending: created.count });
     return { ok: false, error: "capped" };
   }
 

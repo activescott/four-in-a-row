@@ -1,5 +1,6 @@
--- No code has created an invite before this migration, so the table is empty
--- and the new columns can be NOT NULL without a default.
+-- No code created an invite before this migration, so no row can be a live
+-- invite. Clear any stray one, so the NOT NULL columns can't fail the deploy.
+DELETE FROM "invites";
 
 -- AlterTable
 ALTER TABLE "invites" ADD COLUMN     "expires_at" TIMESTAMP(3) NOT NULL,

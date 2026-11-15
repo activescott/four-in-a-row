@@ -49,6 +49,15 @@ export async function action({ request }: Route.ActionArgs) {
       appUrl: appUrl(request),
     });
     if (result.ok) return redirect(`/games/${result.gameId}`);
+    if (result.error === "already_invited") {
+      return data(
+        {
+          error: `You already invited ${email.trim()}. That game is in your list.`,
+          email,
+        },
+        { status: 409 },
+      );
+    }
     const { status, error } = INVITE_ERRORS[result.error];
     return data({ error, email }, { status });
   }

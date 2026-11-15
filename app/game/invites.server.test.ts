@@ -117,11 +117,10 @@ test("an invite starts an INVITED game with the inviter to move, and emails a 7-
 
 test("each invite gets its own random token", async () => {
   const alice = await user("alice");
-  const bob = address("bob");
+  const [bob, carol] = [address("bob"), address("carol")];
   await invite(alice, bob);
-  const first = tokenFrom(bob);
-  await invite(alice, bob);
-  expect(tokenFrom(bob)).not.toBe(first);
+  await invite(alice, carol);
+  expect(tokenFrom(carol)).not.toBe(tokenFrom(bob));
 });
 
 test("an address that isn't an email, or the inviter's own, is refused and nothing is sent", async () => {

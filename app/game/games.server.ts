@@ -48,10 +48,12 @@ export async function makeMove(
 
     const next = outcome(result.board, result.move);
     const other = seat === 1 ? game.playerTwoId : game.playerOneId;
-    // Conditional on the count read above: a concurrent move that got here
-    // first leaves zero rows to update. @@unique([gameId, number]) backs it up.
+    // Conditional on the count and status read above: a concurrent move that
+    // got here first, or an invite accepted since (which `other` above
+    // predates), leaves zero rows to update. @@unique([gameId, number]) backs
+    // it up.
     const { count } = await tx.game.updateMany({
-      where: { id: gameId, moveCount: game.moveCount },
+      where: { id: gameId, moveCount: game.moveCount, status: game.status },
       data: {
         moveCount: game.moveCount + 1,
         nextPlayerId: next.status === "ongoing" ? other : null,
