@@ -25,8 +25,8 @@ export function createUserStore(db: PrismaClient): UserStore {
       }
       // The email provider has already normalised the address to lowercase.
       // An existing row (an account whose email identity is missing) is
-      // returned as is. A row inserted here is marked createdNow, so the
-      // sign-up gate's onVerified knows it may refuse and delete it.
+      // returned as is. A row inserted here is unapproved until the sign-up
+      // gate's onVerified approves it.
       const existing = await db.user.findUnique({
         where: { email: identifier },
       });
@@ -35,12 +35,10 @@ export function createUserStore(db: PrismaClient): UserStore {
         data: { email: identifier },
         skipDuplicates: true,
       });
-      const user =
+      return toAuthUser(
         inserted[0] ??
-        (await db.user.findUniqueOrThrow({ where: { email: identifier } }));
-      const authUser = toAuthUser(user);
-      if (inserted[0]) authUser.metadata!.createdNow = true;
-      return authUser;
+          (await db.user.findUniqueOrThrow({ where: { email: identifier } })),
+      );
     },
     // Games and invites are keyed by user id, so merging two accounts would
     // orphan one player's games. Nothing in the app offers a merge.

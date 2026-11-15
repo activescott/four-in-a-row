@@ -248,18 +248,21 @@ test("every address costs the same lookups, whichever one would match", async ()
 
 test("onVerified logs auth.signin.succeeded with the user id and allows the session", async () => {
   const { gate: open, capture } = gate();
-  const user = { id: "user-1" };
+  const { id } = await db.user.create({
+    data: { email: "returning-member@example.com", approvedAt: new Date() },
+  });
+  const user = { id };
   const identity = {
     id: "identity-1",
-    userId: "user-1",
+    userId: id,
     provider: "email",
-    identifier: "member@example.com",
+    identifier: "returning-member@example.com",
     providerState: {},
     createdAt: new Date(),
   };
 
   const decision = await open.onVerified!({
-    ...attempt("member@example.com"),
+    ...attempt("returning-member@example.com"),
     user,
     identity,
     isNewUser: false,
@@ -267,9 +270,11 @@ test("onVerified logs auth.signin.succeeded with the user id and allows the sess
 
   expect(decision).toBe("allow");
   expect(capture.events("auth.signin.succeeded")).toMatchObject([
-    { userId: "user-1", provider: "email", isNewUser: false },
+    { userId: id, provider: "email", isNewUser: false },
   ]);
-  expect(JSON.stringify(capture.lines)).not.toContain("member@example.com");
+  expect(JSON.stringify(capture.lines)).not.toContain(
+    "returning-member@example.com",
+  );
 });
 
 test("onVerified does not log a sign-in for a link to the signed-in account", async () => {
@@ -421,10 +426,10 @@ test("a row left by a failed delete gets no mail and is refused on the next veri
     answer: true,
     sent: false,
   });
-  expect(
-    await signup.gate.onVerified!({ ...input, isNewUser: false }),
-  ).toEqual({
-    error: expect.objectContaining({ code: "INVALID_CREDENTIALS" }),
-  });
+  expect(await signup.gate.onVerified!({ ...input, isNewUser: false })).toEqual(
+    {
+      error: expect.objectContaining({ code: "INVALID_CREDENTIALS" }),
+    },
+  );
   expect(await db.user.count({ where: { id: input.user.id } })).toBe(0);
 });

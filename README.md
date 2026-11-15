@@ -24,7 +24,7 @@ With `DATABASE_URL` set, the app uses Postgres instead of PGlite. Health checks 
 
 ## Sign-in
 
-Sign-in uses [`@activescott/auth`](https://github.com/activescott/auth): an email link or code at `/login`, and passkeys added from `/profile`. Only an address that already has an account, has a pending invite, or is listed in `SIGNUP_EMAILS` is sent a sign-in email; every other address gets the same answer, so the form never says which addresses can sign in. The library still stores a code for that address, so a correct guess reaches verify, where the gate refuses to create the account and deletes the row the verify made.
+Sign-in uses [`@activescott/auth`](https://github.com/activescott/auth): an email link or code at `/login`, and passkeys added from `/profile`. Only an address that already has an account, has a pending invite, or is listed in `SIGNUP_EMAILS` is sent a sign-in email; every other address gets the same answer, so the form never says which addresses can sign in. The library still stores a code for that address, so a correct guess reaches verify, which inserts the account before the gate runs. An account counts only once the gate has approved it (`users.approved_at`), so the gate refuses a sign-in to any unapproved account without an invite or a `SIGNUP_EMAILS` place and deletes it, and the sign-in email goes only to approved accounts.
 
 ## Invites
 

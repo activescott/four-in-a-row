@@ -19,9 +19,12 @@ export function parseSignupEmails(value: string | undefined): Set<string> {
 // tell a stranger which addresses have an account or an invite.
 //
 // The library still stores a live code for the dropped email, so a caller
-// who guesses it reaches verify. `onVerified` refuses an account the verify
-// has just created for an address with no invite or SIGNUP_EMAILS place, and
-// deletes the user row (and, by cascade, its identity).
+// who guesses it reaches verify, which inserts the users row before the gate
+// runs. So an account counts only once `onVerified` has approved it
+// (`approved_at`): it refuses any sign-in to an unapproved account whose
+// address has no invite or SIGNUP_EMAILS place, and deletes the user row
+// (and, by cascade, its identity). That holds whichever verify inserted the
+// row, and for a row an earlier failed delete left.
 export function createSignupGate({
   db,
   signupEmails,
@@ -48,10 +51,25 @@ export function createSignupGate({
   // one matched.
   async function allowed(email: string) {
     const [user, invite] = await Promise.all([
-      db.user.findUnique({ where: { email }, select: { id: true } }),
+      db.user.findUnique({ where: { email }, select: { approvedAt: true } }),
       pendingInvite(email),
     ]);
-    return seeded.has(email) || user !== null || invite !== null;
+    return seeded.has(email) || !!user?.approvedAt || invite !== null;
+  }
+
+  // Approves the account on its first allowed sign-in.
+  async function approve(userId: string, email: string) {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { approvedAt: true },
+    });
+    if (user?.approvedAt) return true;
+    if (!seeded.has(email) && !(await pendingInvite(email))) return false;
+    await db.user.update({
+      where: { id: userId },
+      data: { approvedAt: new Date() },
+    });
+    return true;
   }
 
   function transport(inner: EmailTransport): EmailTransport {
@@ -81,15 +99,10 @@ export function createSignupGate({
     // Runs after an email link or code verifies and before the session is
     // created. Passkey sign-ins never reach it (see the PR's library gaps).
     async onVerified({ provider, identifier, mode, user, isNewUser }) {
-      // Not the users table: this verify has just inserted the row.
-      if (
-        mode === "signin" &&
-        isNewUser &&
-        user.metadata?.createdNow === true &&
-        !seeded.has(identifier) &&
-        !(await pendingInvite(identifier))
-      ) {
-        await db.user.deleteMany({ where: { id: user.id } });
+      // Not isNewUser: a second verify of the same code finds the row the
+      // first inserted, and a failed delete leaves one behind.
+      if (mode === "signin" && !(await approve(user.id, identifier))) {
+        await db.user.deleteMany({ where: { id: user.id, approvedAt: null } });
         logger.info({
           event: "auth.signin.failed",
           provider,
