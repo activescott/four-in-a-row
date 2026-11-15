@@ -75,10 +75,16 @@ export function startPolling({
 }
 
 /**
- * The state with a poll's answer applied: the new discs, the turn, the last
- * move and the result. Returns the same state when there is nothing to apply.
+ * The state with the answer to a poll for game `id` applied: the new discs,
+ * the turn, the last move and the result. Returns the same state when there
+ * is nothing to apply, or the page has moved to another game.
  */
-export function applyUpdate(state: GameState, update: StateUpdate): GameState {
+export function applyUpdate(
+  id: string,
+  state: GameState,
+  update: StateUpdate,
+): GameState {
+  if (state.id !== id) return state;
   if (update.unchanged || update.moveCount <= state.moveCount) return state;
   const moves = update.moves.filter((m) => m.number > state.moveCount);
   if (moves[0]?.number !== state.moveCount + 1) return state;
@@ -94,6 +100,16 @@ export function applyUpdate(state: GameState, update: StateUpdate): GameState {
     winningCells: update.winningCells,
     lastMove: update.lastMove,
   };
+}
+
+/**
+ * The state to show when a loader result arrives: the loader's, unless the
+ * polled state is newer (the reload started before the poll's moves came).
+ */
+export function latestState(live: GameState, loaded: GameState) {
+  return loaded.id !== live.id || loaded.moveCount >= live.moveCount
+    ? loaded
+    : live;
 }
 
 /**
@@ -141,9 +157,7 @@ export function useLiveGame(loaded: GameState): {
   if (seen !== loaded) {
     setSeen(loaded);
     if (loaded.id !== live.id) setEnded(null);
-    if (loaded.id !== live.id || loaded.moveCount >= live.moveCount) {
-      setLive(loaded);
-    }
+    setLive(latestState(live, loaded));
   }
 
   const latest = useRef(live);
@@ -166,9 +180,7 @@ export function useLiveGame(loaded: GameState): {
         const update = await readPoll(response);
         if (update === null) return;
         if (typeof update === "string") return setEnded(update);
-        setLive((current) =>
-          current.id === id ? applyUpdate(current, update) : current,
-        );
+        setLive((current) => applyUpdate(id, current, update));
       },
     });
   }, [loaded.id, polling]);
