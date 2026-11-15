@@ -1,6 +1,6 @@
 import nodemailer, { type SendMailOptions } from "nodemailer";
 import { expect, test } from "vitest";
-import { createLogger } from "../logger.server";
+import { createLogger, type Logger } from "../logger.server";
 import { logCapture } from "../test/routes";
 import { CaptureMailer, createSmtpMailer, type Mail } from "./mailer.server";
 
@@ -92,13 +92,141 @@ test("the SMTP mailer logs why the relay refused, without the link, code, body o
       code: "EENVELOPE",
       responseCode: 550,
       command: "RCPT TO",
-      message: "550 5.7.1 <[recipient]>: Relay access denied",
+      message: "550 5.7.1 <[redacted]>: Relay access denied",
     }),
   ]);
   const logged = JSON.stringify(log.lines);
   expect(logged).not.toContain("secret-token");
   expect(logged).not.toContain("482913");
   expect(logged).not.toContain("b@example.com");
+});
+
+async function failWith(
+  error: unknown,
+  to = "b@example.com",
+  link = "https://app.example/verify?token=secret-token",
+) {
+  const transport = nodemailer.createTransport({ jsonTransport: true });
+  transport.sendMail = (async () => {
+    throw error;
+  }) as typeof transport.sendMail;
+  const log = logCapture();
+  const mailer = createSmtpMailer({
+    transport,
+    from: "noreply@example.com",
+    logger: createLogger(log.destination),
+  });
+  const result = await mailer.send({ ...mail, kind: "signin", to, link });
+  return { result, events: log.events("email.send.failed"), log };
+}
+
+test("the logged relay message is scrubbed of the link, URLs, addresses and digit runs", async () => {
+  const link = "https://app.example/verify?token=secret-token";
+  const relay = [
+    `550 denied ${link} again`,
+    "see http://other.example/x?t=abc123def for help",
+    "code 482913",
+    "for B@EXAMPLE.COM",
+    'for "Bee" <b@example.com>',
+    "for [b@example.com]",
+    "for user b",
+    "for a+b@x.com",
+    "plus someone.else@elsewhere.org",
+  ].join(" ");
+  const { result, events } = await failWith(
+    new Error(relay),
+    "b@example.com",
+    link,
+  );
+
+  expect(result).toBe(false);
+  const message = String((events[0] as { message: unknown }).message);
+  for (const secret of [
+    "secret-token",
+    "app.example",
+    "other.example",
+    "abc123def",
+    "482913",
+    "example.com",
+    "EXAMPLE",
+    "a+b",
+    "x.com",
+    "elsewhere",
+    "someone",
+  ]) {
+    expect(message).not.toContain(secret);
+  }
+  expect(message).not.toMatch(/\bb\b/);
+});
+
+test("the logged relay message stays readable and is one line of at most 200 characters", async () => {
+  const plain = await failWith(new Error("550 5.7.1 Relay access denied"));
+  expect(plain.events[0]).toMatchObject({
+    message: "550 5.7.1 Relay access denied",
+  });
+
+  const long = await failWith(
+    new Error(`Relay access denied\nsecond line\n${"x".repeat(500)}`),
+  );
+  expect(long.events[0]).toMatchObject({ message: "Relay access denied" });
+
+  const huge = await failWith(new Error("y".repeat(500)));
+  expect(String((huge.events[0] as { message: unknown }).message)).toHaveLength(
+    200,
+  );
+});
+
+test("only a string code and command and a number responseCode are logged", async () => {
+  const { events } = await failWith(
+    Object.assign(new Error("nope"), {
+      code: { secret: "a" },
+      command: 5,
+      responseCode: "550",
+    }),
+  );
+  expect(events[0]).not.toHaveProperty("code");
+  expect(events[0]).not.toHaveProperty("command");
+  expect(events[0]).not.toHaveProperty("responseCode");
+});
+
+test.each([
+  [null],
+  [undefined],
+  ["boom"],
+  [42],
+  [{ message: { toString: 1 } }],
+])(
+  "send answers false and logs once when the relay throws %j",
+  async (thrown) => {
+    const { result, events } = await failWith(thrown);
+    expect(result).toBe(false);
+    expect(events).toHaveLength(1);
+  },
+);
+
+test("send answers false when the message cannot be turned into a string", async () => {
+  const hostile = { message: Object.create(null) };
+  const { result } = await failWith(hostile);
+  expect(result).toBe(false);
+});
+
+test("send answers false when the logger itself throws", async () => {
+  const transport = nodemailer.createTransport({ jsonTransport: true });
+  transport.sendMail = (async () => {
+    throw new Error("refused");
+  }) as typeof transport.sendMail;
+  const logger = {
+    error() {
+      throw new Error("log sink down");
+    },
+  } as unknown as Logger;
+  const mailer = createSmtpMailer({
+    transport,
+    from: "noreply@example.com",
+    logger,
+  });
+
+  expect(await mailer.send(mail)).toBe(false);
 });
 
 test("the capture mailer keeps the last mail of each kind per address and sends nothing", async () => {
