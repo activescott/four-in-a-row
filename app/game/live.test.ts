@@ -4,6 +4,7 @@ import {
   applyUpdate,
   isLive,
   latestState,
+  pollUrl,
   readPoll,
   startPolling,
 } from "./live";
@@ -154,6 +155,24 @@ function update(overrides: Partial<StateUpdate> = {}): StateUpdate {
   } as StateUpdate;
 }
 
+test("applies a status change with no new moves, such as an accepted invite", () => {
+  const invited = state({
+    status: "INVITED",
+    moveCount: 1,
+    you: 1,
+    lastMove: { row: 0, column: 3, player: 1 },
+  });
+  const next = applyUpdate(
+    "g1",
+    invited,
+    update({ status: "ACTIVE", yourTurn: false, moves: [] }),
+  );
+  expect(next).toMatchObject({ status: "ACTIVE", moveCount: 1 });
+  expect(next.board).toEqual(invited.board);
+  // The same status at the same count is nothing new.
+  expect(applyUpdate("g1", next, update({ moves: [] }))).toBe(next);
+});
+
 test("applies new moves to the board with the turn, last move and result", () => {
   const next = applyUpdate("g1", state(), update());
   expect(next).toMatchObject({
@@ -258,4 +277,10 @@ test("a loader result replaces the polled state unless it is older", () => {
   // Another game (a rematch) always replaces it.
   const rematch = state({ id: "g2", moveCount: 0 });
   expect(latestState(polled, rematch)).toBe(rematch);
+});
+
+test("the poll sends the status it has as well as the move count", () => {
+  expect(pollUrl(state({ moveCount: 1, status: "INVITED" }))).toBe(
+    "/games/g1/state?since=1&status=INVITED",
+  );
 });

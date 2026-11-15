@@ -122,8 +122,16 @@ async function rematch(as: Player, gameId: string) {
   );
 }
 
-async function readState(as: Player, gameId: string, since?: number | string) {
-  const query = since === undefined ? "" : `?since=${since}`;
+async function readState(
+  as: Player,
+  gameId: string,
+  since?: number | string,
+  status?: string,
+) {
+  const params = new URLSearchParams();
+  if (since !== undefined) params.set("since", String(since));
+  if (status !== undefined) params.set("status", status);
+  const query = params.size ? `?${params}` : "";
   return reply(
     await run(
       state.loader,
@@ -859,6 +867,51 @@ test("state?since= ahead of the game, or not a whole number, is refused with 400
       since,
       status: 400,
     });
+  }
+});
+
+test("state?since=n&status= returns the new state when an INVITED game turns ACTIVE at the same move count", async () => {
+  const one = await player("inviter");
+  const two = await player("invitee");
+  const game = await db.game.create({
+    data: { playerOneId: one.id, status: "INVITED", nextPlayerId: one.id },
+  });
+  await move(one, game.id, 3);
+  expect(await readState(one, game.id, 1, "INVITED")).toEqual({
+    status: 200,
+    body: { unchanged: true, moveCount: 1 },
+  });
+
+  // The invitee accepts: no move, so the move count stays at 1.
+  await db.game.update({
+    where: { id: game.id },
+    data: { playerTwoId: two.id, status: "ACTIVE", nextPlayerId: two.id },
+  });
+
+  expect(await readState(one, game.id, 1, "INVITED")).toEqual({
+    status: 200,
+    body: {
+      unchanged: false,
+      moveCount: 1,
+      status: "ACTIVE",
+      yourTurn: false,
+      result: null,
+      winningCells: [],
+      lastMove: { row: 0, column: 3, player: 1 },
+      moves: [],
+    },
+  });
+  // A client that already has ACTIVE is told nothing changed.
+  expect(await readState(one, game.id, 1, "ACTIVE")).toEqual({
+    status: 200,
+    body: { unchanged: true, moveCount: 1 },
+  });
+});
+
+test("state?status= that isn't a game status is refused with 400", async () => {
+  const { one, game } = await activeGame();
+  for (const status of ["", "active", "PLAYING"]) {
+    expect((await readState(one, game.id, 0, status)).status).toBe(400);
   }
 });
 
