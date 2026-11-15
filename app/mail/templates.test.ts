@@ -139,7 +139,7 @@ test("the sign-in HTML has a heading, the button before the code, and a calm exp
     /<p style="[^"]*color: #4b5563;[^"]*font-size: 15px[^"]*">This link works for 5 minutes\. If it runs out, go back to the sign-in page and ask for a new one\.<\/p>/,
   );
   expect(html).toMatch(
-    /font-size: 13px[^>]*>If you weren't expecting this, you can ignore it\./,
+    /font-size: 13px[^>]*>If you weren&#39;t expecting this, you can ignore it\./,
   );
   expect(html).not.toContain("12px");
   expect(html).toMatch(
@@ -163,7 +163,9 @@ test("the link purpose confirms an address instead of asking for a sign-in", () 
   expect(mail.html).toContain("Use the button below to confirm it");
   expect(mail.html).toContain(">Confirm email</a>");
   expect(mail.html).not.toMatch(/sign in and play|sign-in/i);
-  expect(mail.html).toContain("If that wasn't you, you can ignore this email.");
+  expect(mail.html).toContain(
+    "If that wasn&#39;t you, you can ignore this email.",
+  );
 });
 
 test("the sign-in purpose is the default", () => {
