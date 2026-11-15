@@ -89,6 +89,7 @@ export default function Games({
   actionData,
 }: Route.ComponentProps) {
   const { games } = loaderData;
+  const opponents = games.map((game) => game.opponent ?? game.invited ?? null);
   const navigation = useNavigation();
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-4 p-4">
@@ -168,8 +169,8 @@ export default function Games({
                 <span className="flex min-w-0 flex-col">
                   <span className="min-w-0 truncate text-lg text-slate-900">
                     {!game.opponent && game.invited
-                      ? `${displayName(game.invited)} (invited)`
-                      : displayName(game.opponent)}
+                      ? `${displayName(game.invited, opponents)} (invited)`
+                      : displayName(game.opponent, opponents)}
                   </span>
                   <span
                     className={

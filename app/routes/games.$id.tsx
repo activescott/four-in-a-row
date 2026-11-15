@@ -45,8 +45,13 @@ const DISC_DIM: Record<Player, string> = {
   2: "bg-amber-200",
 };
 // Marks drawn on a disc: dark on yellow, white on red, so both stay legible.
+// The last-move mark is a ring, not a filled dot: a dark dot on red reads as
+// a hole, now that the empty holes are dark.
 const INK: Record<Player, string> = { 1: "text-white", 2: "text-slate-900" };
-const INK_BG: Record<Player, string> = { 1: "bg-white", 2: "bg-slate-900" };
+// An empty hole is dark, so a disc in any tint stands clear of it. WCAG
+// contrast against slate-900: red-300 9.30, amber-200 14.34, red-600 3.74,
+// amber-400 10.36. (Against the old white hole: 1.92, 1.24, 4.77, 1.72.)
+const HOLE = "bg-slate-900";
 const COLOUR: Record<Player, string> = { 1: "red", 2: "yellow" };
 
 const ERRORS: Record<string, string> = {
@@ -131,7 +136,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           className={`size-6 shrink-0 rounded-full ${DISC[game.you]}`}
           aria-hidden="true"
         />
-        Your turn
+        Your turn.
       </>
     );
   } else if (!emails[opponent]) status = "Waiting for your opponent to join.";
@@ -142,7 +147,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           className={`size-6 shrink-0 rounded-full ${DISC[opponent]}`}
           aria-hidden="true"
         />
-        Waiting for {opponentName} ({COLOUR[opponent]}).
+        {opponentName}&apos;s turn.
       </>
     );
   }
@@ -239,15 +244,15 @@ export default function Board({ loaderData }: Route.ComponentProps) {
                   <span
                     key={row}
                     className={`flex aspect-square w-full items-center justify-center rounded-full ${
-                      cell ? (dim ? DISC_DIM[cell] : DISC[cell]) : "bg-white"
+                      cell ? (dim ? DISC_DIM[cell] : DISC[cell]) : HOLE
                     }${ring}`}
                   >
                     {cell && isWin && <Star className={INK[cell]} />}
                     {cell && isLast && !isWin && (
                       <span
-                        role="img"
-                        aria-label="Last move"
-                        className={`size-4 rounded-full ${INK_BG[cell]}`}
+                        data-last-move
+                        aria-hidden="true"
+                        className={`size-4 rounded-full border-[3px] border-current ${INK[cell]}`}
                       />
                     )}
                   </span>
