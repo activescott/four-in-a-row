@@ -90,6 +90,35 @@ test("never runs two polls at once, and keeps going after a failed one", async (
   expect(poll).toHaveBeenCalledTimes(3);
 });
 
+test("gives up on a hung poll after the timeout and keeps polling", async () => {
+  const signals: AbortSignal[] = [];
+  // Like fetch: pending until its signal aborts it.
+  const poll = vi.fn(
+    (signal: AbortSignal) =>
+      new Promise<void>((_, reject) => {
+        signals.push(signal);
+        signal.addEventListener("abort", () => reject(signal.reason));
+      }),
+  );
+  const stop = startPolling({
+    poll,
+    doc: fakeDocument(),
+    intervalMs: 1500,
+    timeoutMs: 5000,
+  });
+
+  await vi.advanceTimersByTimeAsync(1500 + 4999);
+  expect(signals[0]!.aborted).toBe(false);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(signals[0]!.aborted).toBe(true);
+  await vi.advanceTimersByTimeAsync(1500);
+  expect(poll).toHaveBeenCalledTimes(2);
+
+  // Leaving the page aborts the request still running.
+  stop();
+  expect(signals[1]!.aborted).toBe(true);
+});
+
 function state(overrides: Partial<GameState> = {}): GameState {
   return {
     id: "g1",
