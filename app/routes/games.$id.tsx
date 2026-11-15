@@ -1,4 +1,5 @@
-import { Form, Link, useFetcher } from "react-router";
+import { useEffect, useRef } from "react";
+import { Form, Link, useFetcher, useRevalidator } from "react-router";
 import { requireAuth } from "../auth.server";
 import { getDb } from "../db.server";
 import {
@@ -72,6 +73,15 @@ export default function Board({ loaderData }: Route.ComponentProps) {
   const fetcher = useFetcher<typeof moveAction>();
   const opponent: Player = game.you === 1 ? 2 : 1;
   const opponentName = displayName(emails[opponent]);
+  // The poll saw the invitee join: reload once for their name.
+  const { revalidate } = useRevalidator();
+  const joined = game.status !== "INVITED" && !emails[opponent];
+  const reloadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!joined || reloadedFor.current === game.id) return;
+    reloadedFor.current = game.id;
+    void revalidate();
+  }, [joined, game.id, revalidate]);
   const finished = game.result !== null;
   const canMove = game.yourTurn && fetcher.state === "idle";
   const winning = new Set(game.winningCells.map((c) => `${c.row}:${c.column}`));

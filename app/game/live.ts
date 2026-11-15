@@ -74,6 +74,11 @@ export function startPolling({
   };
 }
 
+/** The poll for this state: what changed since its move count and status. */
+export function pollUrl(state: Pick<GameState, "id" | "moveCount" | "status">) {
+  return `/games/${state.id}/state?since=${state.moveCount}&status=${state.status}`;
+}
+
 /**
  * The state with the answer to a poll for game `id` applied: the new discs,
  * the turn, the last move and the result. Returns the same state when there
@@ -85,9 +90,15 @@ export function applyUpdate(
   update: StateUpdate,
 ): GameState {
   if (state.id !== id) return state;
-  if (update.unchanged || update.moveCount <= state.moveCount) return state;
+  if (update.unchanged || update.moveCount < state.moveCount) return state;
   const moves = update.moves.filter((m) => m.number > state.moveCount);
-  if (moves[0]?.number !== state.moveCount + 1) return state;
+  if (moves.length === 0) {
+    // Same move count: only a status change (an accepted invite) is news.
+    if (update.moveCount !== state.moveCount) return state;
+    if (update.status === state.status) return state;
+    return { ...state, status: update.status, yourTurn: update.yourTurn };
+  }
+  if (moves[0]!.number !== state.moveCount + 1) return state;
   const board = state.board.map((row) => [...row]) as Cell[][];
   for (const m of moves) board[m.row]![m.column] = m.player;
   return {
@@ -172,8 +183,8 @@ export function useLiveGame(loaded: GameState): {
       doc: document,
       intervalMs: POLL_INTERVAL_MS,
       poll: async (signal) => {
-        const { id, moveCount } = latest.current;
-        const response = await fetch(`/games/${id}/state?since=${moveCount}`, {
+        const { id } = latest.current;
+        const response = await fetch(pollUrl(latest.current), {
           headers: { accept: "application/json" },
           signal,
         });

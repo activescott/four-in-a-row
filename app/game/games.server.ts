@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../generated/prisma/client";
+import type { GameStatus, PrismaClient } from "../generated/prisma/client";
 import { logger } from "../logger.server";
 import { applyMove, boardFromMoves, outcome, type Player } from "./rules";
 
@@ -140,12 +140,18 @@ export function gameState(game: GameWithMoves, userId: string) {
 export type GameState = ReturnType<typeof gameState>;
 
 /**
- * What changed since the client's move count: "unchanged", or the moves
- * after it with the status. Null when `since` is ahead of the game.
+ * What changed since the client's move count and status: "unchanged", or the
+ * moves after it with the status. A status change with no move (an accepted
+ * invite) counts as a change. Null when `since` is ahead of the game.
  */
-export function stateSince(game: GameWithMoves, userId: string, since: number) {
+export function stateSince(
+  game: GameWithMoves,
+  userId: string,
+  since: number,
+  status?: GameStatus,
+) {
   if (since > game.moveCount) return null;
-  if (since === game.moveCount) {
+  if (since === game.moveCount && (!status || status === game.status)) {
     return { unchanged: true as const, moveCount: game.moveCount };
   }
   const state = gameState(game, userId);
