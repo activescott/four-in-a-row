@@ -5,6 +5,7 @@ import { getDb } from "../db.server";
 import {
   findGameForPlayer,
   gameState,
+  invitedEmailFor,
   playerEmails,
 } from "../game/games.server";
 import { displayName } from "../game/display";
@@ -25,6 +26,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   return {
     game: gameState(game, user.id),
     emails: await playerEmails(db, game),
+    invitedEmail: await invitedEmailFor(db, game, user.id),
   };
 }
 
@@ -55,6 +57,22 @@ const ERRORS: Record<string, string> = {
   column_out_of_range: "Pick one of the seven columns.",
 };
 
+function Check() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="mt-0.5 size-6 shrink-0 fill-none stroke-current stroke-[3] text-green-700"
+    >
+      <path
+        d="M4 12.5l5 5L20 6.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function Star({ className }: { className: string }) {
   return (
     <svg
@@ -72,7 +90,13 @@ export default function Board({ loaderData }: Route.ComponentProps) {
   const { game, ended } = useLiveGame(loaderData.game);
   const fetcher = useFetcher<typeof moveAction>();
   const opponent: Player = game.you === 1 ? 2 : 1;
-  const opponentName = displayName(emails[opponent]);
+  // Until the invitee joins, the inviter sees whom the invite went to.
+  const invitedEmail =
+    game.status === "INVITED" ? loaderData.invitedEmail : null;
+  const opponentName =
+    !emails[opponent] && invitedEmail
+      ? `${displayName(invitedEmail)} (invited)`
+      : displayName(emails[opponent]);
   // The poll saw the invitee join: reload once for their name.
   const { revalidate } = useRevalidator();
   const joined = game.status !== "INVITED" && !emails[opponent];
@@ -147,6 +171,21 @@ export default function Board({ loaderData }: Route.ComponentProps) {
         </Link>
       </nav>
       <h1 className="-mt-2 text-2xl font-bold text-slate-900">Four in a Row</h1>
+
+      {invitedEmail && (
+        <p
+          role="status"
+          className="flex items-start gap-2 text-lg text-slate-800"
+        >
+          <Check />
+          <span>
+            We emailed an invite to <strong>{invitedEmail}</strong>.
+            {game.yourTurn && game.moveCount === 0
+              ? " You can play your first move now."
+              : ""}
+          </span>
+        </p>
+      )}
 
       <div className="flex flex-col gap-1 text-slate-800">
         {legend(game.you, `You are ${COLOUR[game.you]}`)}

@@ -108,7 +108,7 @@ export default function Games({
       >
         <h2 className="text-lg font-semibold text-slate-900">New game</h2>
         <label htmlFor="invite-email" className="text-slate-700">
-          Your opponent&apos;s email
+          Who do you want to play? Enter their email.
         </label>
         <div className="flex gap-2">
           <input
@@ -167,7 +167,9 @@ export default function Games({
                 />
                 <span className="flex min-w-0 flex-col">
                   <span className="min-w-0 truncate text-lg text-slate-900">
-                    {displayName(game.opponent)}
+                    {!game.opponent && game.invited
+                      ? `${displayName(game.invited)} (invited)`
+                      : displayName(game.opponent)}
                   </span>
                   <span
                     className={

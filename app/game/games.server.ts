@@ -197,6 +197,7 @@ export async function listGames(db: PrismaClient, userId: string) {
   const games = await db.game.findMany({
     where: { OR: [{ playerOneId: userId }, { playerTwoId: userId }] },
     orderBy: { createdAt: "desc" },
+    include: { invite: { select: { email: true } } },
   });
   const opponentIds = games
     .map((g) => (g.playerOneId === userId ? g.playerTwoId : g.playerOneId))
@@ -211,12 +212,44 @@ export async function listGames(db: PrismaClient, userId: string) {
       status: game.status,
       opponentSeat: (game.playerOneId === userId ? 2 : 1) as Player,
       opponent: opponentId ? (emails.get(opponentId) ?? null) : null,
+      invited: invitedEmail(game, userId),
       yourTurn: game.nextPlayerId === userId,
       result: resultFor(game, userId),
     };
   });
   // Array.sort is stable, so the newest-first order holds inside each group.
   return rows.sort((a, b) => Number(b.yourTurn) - Number(a.yourTurn));
+}
+
+/**
+ * The address the user invited to this game while it waits for them to
+ * join, or null. Only the inviter is ever shown it.
+ */
+function invitedEmail(
+  game: {
+    status: GameStatus;
+    playerOneId: string;
+    invite: { email: string } | null;
+  },
+  userId: string,
+) {
+  return game.status === "INVITED" && game.playerOneId === userId
+    ? (game.invite?.email ?? null)
+    : null;
+}
+
+/** invitedEmail for one game, looked up. */
+export async function invitedEmailFor(
+  db: PrismaClient,
+  game: { id: string; status: GameStatus; playerOneId: string },
+  userId: string,
+) {
+  if (game.status !== "INVITED" || game.playerOneId !== userId) return null;
+  const invite = await db.invite.findUnique({
+    where: { gameId: game.id },
+    select: { email: true },
+  });
+  return invitedEmail({ ...game, invite }, userId);
 }
 
 export type RematchOutcome =
