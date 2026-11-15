@@ -110,6 +110,7 @@ export function gameState(game: GameWithMoves, userId: string) {
     yourTurn: game.nextPlayerId === userId,
     result: resultFor(game, userId),
     winningCells: result?.status === "win" ? result.cells : [],
+    lastMove: last,
   };
 }
 
@@ -126,7 +127,10 @@ function resultFor(
   return null;
 }
 
-/** The user's games, newest first, with the opponent's email. */
+/**
+ * The user's games with the opponent's email: games waiting on the user
+ * first, newest first within each group.
+ */
 export async function listGames(db: PrismaClient, userId: string) {
   const games = await db.game.findMany({
     where: { OR: [{ playerOneId: userId }, { playerTwoId: userId }] },
@@ -137,17 +141,20 @@ export async function listGames(db: PrismaClient, userId: string) {
     .filter((id): id is string => id !== null);
   const users = await db.user.findMany({ where: { id: { in: opponentIds } } });
   const emails = new Map(users.map((u) => [u.id, u.email]));
-  return games.map((game) => {
+  const rows = games.map((game) => {
     const opponentId =
       game.playerOneId === userId ? game.playerTwoId : game.playerOneId;
     return {
       id: game.id,
       status: game.status,
+      opponentSeat: (game.playerOneId === userId ? 2 : 1) as Player,
       opponent: opponentId ? (emails.get(opponentId) ?? null) : null,
       yourTurn: game.nextPlayerId === userId,
       result: resultFor(game, userId),
     };
   });
+  // Array.sort is stable, so the newest-first order holds inside each group.
+  return rows.sort((a, b) => Number(b.yourTurn) - Number(a.yourTurn));
 }
 
 export type RematchOutcome =

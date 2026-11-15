@@ -746,3 +746,46 @@ function missFirstRematchLookup(): PrismaClient {
     },
   });
 }
+
+test("the game list puts your-turn games first, newest first within each group", async () => {
+  const me = await player("me");
+  const them = await player("them");
+  const make = (first: Player, next: Player) =>
+    db.game.create({
+      data: {
+        playerOneId: first.id,
+        playerTwoId: first === me ? them.id : me.id,
+        status: "ACTIVE",
+        nextPlayerId: next.id,
+      },
+    });
+  const theirOld = await make(me, them);
+  const mineOld = await make(them, me);
+  const theirNew = await make(me, them);
+  const mineNew = await make(them, me);
+  const { body } = (await reply(
+    await run(games.loader, get("/games", { cookie: me.cookie })),
+  )) as { body: { games: { id: string }[] } };
+  expect(body.games.map((g) => g.id)).toEqual([
+    mineNew.id,
+    mineOld.id,
+    theirNew.id,
+    theirOld.id,
+  ]);
+});
+
+test("the board state names the last move's column, row and seat", async () => {
+  const { one, two, game } = await activeGame();
+  expect((await readState(one, game.id)).body).toMatchObject({
+    lastMove: null,
+  });
+  await makeMove(db, {
+    gameId: game.id,
+    userId: one.id,
+    column: 3,
+    expectedMoveCount: 0,
+  });
+  expect((await readState(two, game.id)).body).toMatchObject({
+    lastMove: { row: 0, column: 3, player: 1 },
+  });
+});
