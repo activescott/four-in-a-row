@@ -156,7 +156,7 @@ test("the winning four carry the white and dark rings, and nothing else does", (
 
 const legendOf = (html: string) => html.slice(0, html.indexOf("<form"));
 const swatches = (html: string) =>
-  legendOf(html).match(/<span[^>]*rounded-full[^>]*>/g) ?? [];
+  legendOf(html).match(/<span[^>]*size-5[^>]*>/g) ?? [];
 
 test("the legend swatch of the losing player is tinted like their discs on the board", () => {
   const legend = legendOf(finishedBoard("lost"));

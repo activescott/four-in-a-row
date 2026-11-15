@@ -51,8 +51,9 @@ const DISC_DIM: Record<Player, string> = {
   2: "bg-amber-200",
 };
 // Marks drawn on a disc: dark on yellow, white on red, so both stay legible.
-// The last-move mark is a ring, not a filled dot: a dark dot on red reads as
-// a hole, now that the empty holes are dark.
+// The last-move mark is a small filled dot, white on red and dark on yellow,
+// with no ring of its own: a ring there reads as a target next to the yellow
+// disc's inner ring. White on red is not mistaken for a hole (holes are dark).
 const INK: Record<Player, string> = { 1: "text-white", 2: "text-slate-900" };
 // An empty hole is dark, so a disc in any tint stands clear of it. WCAG
 // contrast against slate-900: red-300 9.30, amber-200 14.34, red-600 3.74,
@@ -60,7 +61,9 @@ const INK: Record<Player, string> = { 1: "text-white", 2: "text-slate-900" };
 // The hole gets a 1 px lighter edge so the seven columns read on the navy board.
 // The winning ring is white outside, with a dark ring inside it: white alone
 // is 1.24:1 against pale yellow, and dark alone vanishes on the holes. The
-// dark ring is slate-900 on amber-400 10.36, white on slate-900 17.85.
+// dark ring sits between the white band (outside) and the disc fill (inside):
+// slate-900 on white 17.85, on red-600 3.74, on amber-400 10.36. The ring, not
+// the fill, carries the red/yellow distinction on a winning disc.
 const WIN_RING = "shadow-[inset_0_0_0_4px_#fff,inset_0_0_0_7px_#0f172a]";
 const HOLE = "bg-slate-900 ring-1 ring-inset ring-slate-700";
 // Yellow discs, whatever their tint, get a thin inner ring so red and yellow
@@ -189,7 +192,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
       className={`flex items-center gap-2 ${mover === seat ? "font-semibold" : ""}`}
     >
       <span
-        className={`relative flex size-4 shrink-0 items-center justify-center rounded-full ${
+        className={`relative flex size-5 shrink-0 items-center justify-center rounded-full border border-slate-500 ${
           seat === loser ? DISC_DIM[seat] : DISC[seat]
         } ${mover === seat ? "ring-2 ring-slate-900 ring-offset-2" : ""}`}
       >
@@ -287,7 +290,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
                       <span
                         data-last-move
                         aria-hidden="true"
-                        className={`size-4 rounded-full border-[3px] border-current ${INK[cell]}`}
+                        className={`size-3 rounded-full bg-current ${INK[cell]}`}
                       />
                     )}
                   </span>
