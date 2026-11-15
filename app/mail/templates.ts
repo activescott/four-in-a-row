@@ -88,7 +88,7 @@ const SIGN_IN_COPY = {
   heading: `Sign in to ${APP}`,
   lede: `sign in and play ${APP}`,
   button: "Sign in and play",
-  codeIntro: "Or type this code on the sign-in page:",
+  codeIntro: "Or type your sign-in code on the sign-in page.",
   // Literal "Your sign-in code is: N" so mail apps offer AutoFill.
   codeLabel: "Your sign-in code is: ",
   retry: "go back to the sign-in page and ask for a new one",
@@ -100,7 +100,7 @@ const LINK_COPY = {
   heading: `Confirm your email for ${APP}`,
   lede: "confirm it",
   button: "Confirm email",
-  codeIntro: "Or type this code where you were asked for it:",
+  codeIntro: "Or type your confirmation code where you were asked for it.",
   codeLabel: "Your confirmation code is: ",
   retry: `go back to ${APP} and ask for a new one`,
   ignore: "If that wasn't you, you can ignore this email.",
@@ -140,7 +140,7 @@ export function signInEmail({
 
   const text = [
     `${intro ? `${intro} Use this link to ${c.lede}:` : `Use this link to ${c.lede}:`}\n${link}`,
-    ...(code ? [`${c.codeIntro}\n\n${c.codeLabel}${code}`] : []),
+    ...(code ? [`${c.codeIntro} ${c.codeLabel}${code}`] : []),
     expiry,
     c.ignore,
   ].join("\n\n");
@@ -149,9 +149,10 @@ export function signInEmail({
 <h1 style="font-size: 22px; font-weight: bold; margin: 0 0 16px; color: ${TEXT};">${escape(c.heading)}</h1>
 ${p("font-size: 16px;", escape(`${intro ? `${intro} ` : ""}Use the button below to ${c.lede}.`))}
 <p style="margin: 30px 0;"><a href="${href}" style="background: ${BLUE}; color: white; padding: 14px 28px; font-size: 18px; text-decoration: none; border-radius: 6px; display: inline-block;">${escape(c.button)}</a></p>
-${code ? `${p("font-size: 16px; margin-bottom: 4px;", escape(c.codeIntro))}\n${p("font-size: 16px; margin-top: 0;", `${escape(c.codeLabel)}<span style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">${escape(code)}</span>`)}\n` : ""}${p(`color: ${MUTED}; font-size: 15px;`, escape(expiry))}
-${p(`color: #6b7280; font-size: 13px;`, escape(c.ignore))}
-${p(`color: #6b7280; font-size: 13px; word-break: break-all;`, `If the button doesn't work, open this link: <a href="${href}" style="color: ${BLUE}; word-break: break-all;">${href}</a>`)}
+${code ? `${p("font-size: 16px;", `${escape(c.codeIntro)} ${escape(c.codeLabel)}<span style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">${escape(code)}</span>`)}\n` : ""}${p(`color: ${MUTED}; font-size: 15px;`, escape(expiry))}
+${p(`color: ${MUTED}; font-size: 14px;`, escape(c.ignore))}
+${p(`color: ${MUTED}; font-size: 14px; margin-bottom: 4px;`, escape("If the button doesn't work, open this link:"))}
+${p("font-size: 14px; margin-top: 0; word-break: break-all;", `<a href="${href}" style="color: ${BLUE}; word-break: break-all;">${href}</a>`)}
 </div>`;
 
   return { kind: "signin", to, subject: c.subject, text, html, link };

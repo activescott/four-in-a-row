@@ -106,7 +106,7 @@ test("the sign-in text part leads with the link, then the code, then the expiry"
   expect(mail.text).toBe(
     [
       `Use this link to sign in and play Four in a Row:\n${LINK}`,
-      "Or type this code on the sign-in page:\n\nYour sign-in code is: 123456",
+      "Or type your sign-in code on the sign-in page. Your sign-in code is: 123456",
       "This link works for 5 minutes. If it runs out, go back to the sign-in page and ask for a new one.",
       "If you weren't expecting this, you can ignore it.",
     ].join("\n\n"),
@@ -128,7 +128,7 @@ test("the sign-in HTML has a heading, the button before the code, and a calm exp
 
   expect(html.indexOf("Sign in and play</a>")).toBeGreaterThan(-1);
   expect(html.indexOf("Sign in and play</a>")).toBeLessThan(
-    html.indexOf("Or type this code on the sign-in page:"),
+    html.indexOf("Or type your sign-in code on the sign-in page."),
   );
   expect(html).toContain("Your sign-in code is: ");
   expect(html).toMatch(
@@ -139,9 +139,12 @@ test("the sign-in HTML has a heading, the button before the code, and a calm exp
     /<p style="[^"]*color: #4b5563;[^"]*font-size: 15px[^"]*">This link works for 5 minutes\. If it runs out, go back to the sign-in page and ask for a new one\.<\/p>/,
   );
   expect(html).toMatch(
-    /font-size: 13px[^>]*>If you weren&#39;t expecting this, you can ignore it\./,
+    /color: #4b5563; font-size: 14px[^>]*>If you weren&#39;t expecting this, you can ignore it\./,
   );
-  expect(html).not.toContain("12px");
+  expect(html).toMatch(
+    /color: #4b5563; font-size: 14px[^>]*>If the button doesn&#39;t work, open this link:<\/p>\s*<p[^>]*><a href="/,
+  );
+  expect(html).not.toMatch(/12px|13px|#6b7280/);
   expect(html).toMatch(
     /<a href="[^"]*" style="[^"]*word-break: break-all[^"]*color: #1d4ed8|<a href="[^"]*" style="[^"]*color: #1d4ed8[^"]*word-break: break-all/,
   );
