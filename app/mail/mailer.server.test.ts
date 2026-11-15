@@ -244,3 +244,23 @@ test("the capture mailer keeps the last mail of each kind per address and sends 
   expect(capture.last("c@example.com", "invite")).toBeNull();
   expect(capture.count("b@example.com", "invite")).toBe(2);
 });
+
+test.each([
+  ["letters", "a".repeat(100_000)],
+  ["digits", "7".repeat(100_000)],
+  ["at signs", "a@".repeat(50_000)],
+])(
+  "a 100 KB relay message of %s is scrubbed quickly and still logged capped",
+  async (_name, big) => {
+    const started = performance.now();
+    const { result, events } = await failWith(new Error(big));
+    const elapsed = performance.now() - started;
+
+    expect(result).toBe(false);
+    expect(elapsed).toBeLessThan(200);
+    expect(events).toHaveLength(1);
+    const message = String((events[0] as { message: unknown }).message);
+    expect(message.length).toBeGreaterThan(0);
+    expect(message.length).toBeLessThanOrEqual(200);
+  },
+);
