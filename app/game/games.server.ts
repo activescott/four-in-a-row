@@ -93,6 +93,29 @@ export async function findGameForPlayer(
   return game && isPlayer(game, userId) ? game : null;
 }
 
+// Presence (R6): a poll writes the caller's seenAt at most this often.
+const SEEN_WRITE_INTERVAL_MS = 5_000;
+
+/** Records that a player of this game is looking at it now. */
+export async function recordSeen(
+  db: PrismaClient,
+  game: { id: string; playerOneId: string },
+  userId: string,
+) {
+  const field =
+    userId === game.playerOneId ? "playerOneSeenAt" : "playerTwoSeenAt";
+  const now = new Date();
+  const stale = new Date(now.getTime() - SEEN_WRITE_INTERVAL_MS);
+  // One conditional write: a no-op while the last one is under 5 s old.
+  await db.game.updateMany({
+    where: {
+      id: game.id,
+      OR: [{ [field]: null }, { [field]: { lte: stale } }],
+    },
+    data: { [field]: now },
+  });
+}
+
 type GameWithMoves = NonNullable<Awaited<ReturnType<typeof findGameForPlayer>>>;
 
 /** What a player sees: the board, whose turn it is and the result. */
@@ -115,6 +138,37 @@ export function gameState(game: GameWithMoves, userId: string) {
 }
 
 export type GameState = ReturnType<typeof gameState>;
+
+/**
+ * What changed since the client's move count: "unchanged", or the moves
+ * after it with the status. Null when `since` is ahead of the game.
+ */
+export function stateSince(game: GameWithMoves, userId: string, since: number) {
+  if (since > game.moveCount) return null;
+  if (since === game.moveCount) {
+    return { unchanged: true as const, moveCount: game.moveCount };
+  }
+  const state = gameState(game, userId);
+  return {
+    unchanged: false as const,
+    moveCount: state.moveCount,
+    status: state.status,
+    yourTurn: state.yourTurn,
+    result: state.result,
+    winningCells: state.winningCells,
+    lastMove: state.lastMove,
+    moves: game.moves
+      .filter((m) => m.number > since)
+      .map((m) => ({
+        number: m.number,
+        row: m.row,
+        column: m.column,
+        player: (m.playerId === game.playerOneId ? 1 : 2) as Player,
+      })),
+  };
+}
+
+export type StateUpdate = NonNullable<ReturnType<typeof stateSince>>;
 
 export type GameResult = "won" | "lost" | "draw" | null;
 
