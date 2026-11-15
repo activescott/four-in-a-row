@@ -95,7 +95,9 @@ function scrubRelayMessage(
   { to, link }: { to: string; link: string },
 ) {
   const localPart = to.split("@")[0] ?? "";
-  let scrubbed = message;
+  // Bound the input first: the address pattern is quadratic on a long run
+  // with no spaces, and only the first line is kept anyway.
+  let scrubbed = (message.split(/\r?\n/)[0] ?? "").slice(0, MAX_SCRUB_INPUT);
   for (const literal of [link, to]) {
     if (literal) scrubbed = scrubbed.replaceAll(literal, REDACTED);
   }
@@ -109,10 +111,11 @@ function scrubRelayMessage(
       REDACTED,
     );
   }
-  return (scrubbed.split(/\r?\n/)[0] ?? "").trim().slice(0, 200);
+  return scrubbed.trim().slice(0, 200);
 }
 
 const REDACTED = "[redacted]";
+const MAX_SCRUB_INPUT = 1000;
 
 function escapeRegExp(text: string) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
