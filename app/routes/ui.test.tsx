@@ -337,3 +337,18 @@ test("the board legend keeps the full name in a title when it is cut short", () 
   const html = render("/games/:id", Board, { game: state(), emails });
   expect(html).toContain('title="bob"');
 });
+
+test("a long address in the turn line can wrap and does not push the board wider", () => {
+  const html = render("/games/:id", Board, {
+    game: state({ yourTurn: false }),
+    emails: { 1: "alice@example.com", 2: "margaret.henderson@example.com" },
+    opponents: [
+      "margaret.henderson@example.com",
+      "margaret.henderson@example.org",
+    ],
+  });
+  expect(html).toContain(
+    "margaret.<wbr/>henderson@<wbr/>example.<wbr/>com&#x27;s turn.",
+  );
+  expect(html).toMatch(/<span class="min-w-0 break-words">margaret/);
+});

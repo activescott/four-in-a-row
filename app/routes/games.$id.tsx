@@ -10,6 +10,7 @@ import {
   playerEmails,
 } from "../game/games.server";
 import { displayName } from "../game/display";
+import { Wrappable } from "../game/wrappable";
 import { useLiveGame } from "../game/live";
 import { COLUMNS, ROWS, type Player } from "../game/rules";
 import type { Route } from "./+types/games.$id";
@@ -154,7 +155,9 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           className={`size-6 shrink-0 rounded-full ${DISC[opponent]}`}
           aria-hidden="true"
         />
-        {opponentName}&apos;s turn.
+        <span className="min-w-0 break-words">
+          <Wrappable text={`${opponentName}'s turn.`} />
+        </span>
       </>
     );
   }
