@@ -38,12 +38,16 @@ function state(overrides: Partial<GameState> = {}): GameState {
   };
 }
 
+// What a screen reader or a person reads: markup and React's text separators gone.
+const text = (html: string) =>
+  html.replace(/<!-- -->/g, "").replace(/&#x27;/g, "'");
+
 const emails = { 1: "alice@example.com", 2: "bob@example.com" };
 
 test("the board says who played which column and marks that disc", () => {
   const html = render("/games/:id", Board, { game: state(), emails });
   expect(html).toContain("bob played column 4.");
-  expect(html.match(/aria-label="Last move"/g)).toHaveLength(1);
+  expect(html.match(/data-last-move/g)).toHaveLength(1);
 });
 
 test("the board names you when you made the last move", () => {
@@ -63,31 +67,36 @@ test("a new board has no last-move line or marker", () => {
     emails,
   });
   expect(html).not.toContain("played column");
-  expect(html).not.toContain("Last move");
+  expect(html).not.toContain("data-last-move");
 });
 
 test("the turn heading is short and the legend uses the short name", () => {
   const html = render("/games/:id", Board, { game: state(), emails });
-  expect(html).toContain("Your turn");
+  expect(text(html)).toContain("Your turn.");
   expect(html).not.toContain("you are red");
   expect(html).toContain("bob");
   expect(html).not.toContain("bob@example.com");
 });
 
-test("the board names who it is waiting for and their colour", () => {
+test("the board says whose turn it is when you are waiting", () => {
   const html = render("/games/:id", Board, {
     game: state({ yourTurn: false }),
     emails,
   });
-  expect(html.replace(/<!-- -->/g, "")).toContain("Waiting for bob (yellow).");
+  expect(text(html)).toContain("bob's turn.");
+  expect(text(html)).not.toContain("Waiting for bob");
 });
 
-test("the last-move dot is 16 pt", () => {
+test("the last-move dot is hidden from screen readers, the button already says it", () => {
   const html = render("/games/:id", Board, { game: state(), emails });
-  expect(html).toMatch(/aria-label="Last move"[^>]*class="size-4 /);
+  const marks = html.match(/<span[^>]*data-last-move[^>]*>/g) ?? [];
+  expect(marks).toHaveLength(1);
+  expect(marks[0]).toContain('aria-hidden="true"');
+  expect(html).not.toContain('role="img"');
+  expect(html).not.toContain('aria-label="Last move"');
 });
 
-test("after a win the other discs get a lighter tint, never an opacity fade", () => {
+test("after a win only the winning four are starred and the other discs stay drawn", () => {
   const board = emptyBoard().map((r) => [...r]);
   board[0]![0] = 1;
   board[0]![1] = 2;
@@ -103,9 +112,9 @@ test("after a win the other discs get a lighter tint, never an opacity fade", ()
     }),
     emails,
   });
-  expect(html).not.toContain("opacity-");
-  expect(html).toContain("bg-red-300");
-  expect(html).toContain("bg-amber-200");
+  expect(html.match(/<svg/g)).toHaveLength(1);
+  expect(html).not.toContain("data-last-move");
+  expect(html).toContain("You lost.");
 });
 
 const invitedBoard = (overrides: Partial<GameState> = {}) =>
@@ -141,6 +150,19 @@ test("once the inviter has moved, the board still says who was invited", () => {
   expect(html).not.toContain("first move");
 });
 
+test("the list gives two opponents with one local part their full addresses", () => {
+  const html = render("/games", Games, {
+    games: [
+      row("g1", "bob@a.com", false),
+      row("g2", "bob@b.com", false),
+      row("g3", "cy@a.com", false),
+    ],
+  });
+  expect(html).toContain("bob@a.com");
+  expect(html).toContain("bob@b.com");
+  expect(html).toContain(">cy<");
+});
+
 test("a game list row waiting on a join names the invited player", () => {
   const html = render("/games", Games, {
     games: [
@@ -165,18 +187,19 @@ test("long emails truncate and Rematch never shrinks", () => {
   const html = render("/games", Games, {
     games: [{ ...row("g1", long, false), result: "won" }],
   });
-  expect(html).toMatch(/class="[^"]*min-w-0[^"]*truncate[^"]*"[^>]*>a{80}/);
-  expect(html).toMatch(/<button[^>]*class="[^"]*shrink-0[^"]*"[^>]*>Rematch/);
+  expect(html).toContain("a".repeat(80));
+  expect(html).toMatch(/<button[^>]*>Rematch<\/button>/);
 });
 
-test("your-turn rows are highlighted", () => {
+test("only the rows where it is your turn say so", () => {
   const html = render("/games", Games, {
     games: [
       row("g1", "bob@example.com", true),
       row("g2", "cy@example.com", false),
     ],
   });
-  expect(html.match(/border-l-4/g)).toHaveLength(1);
+  expect(html.match(/Your turn/g)).toHaveLength(1);
+  expect(html.match(/Their turn/g)).toHaveLength(1);
 });
 
 test("the game list has a New game form asking who to play", () => {
