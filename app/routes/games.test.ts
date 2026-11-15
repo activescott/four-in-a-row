@@ -867,3 +867,35 @@ test("a non-player polling state?since=n gets 404", async () => {
   const outsider = await player("outsider");
   expect((await readState(outsider, game.id, 0)).status).toBe(404);
 });
+
+test("a poll records when that player last saw the game, at most every 5 s", async () => {
+  const { one, two, game } = await activeGame();
+  const seen = async () => {
+    const g = await db.game.findUniqueOrThrow({ where: { id: game.id } });
+    return { one: g.playerOneSeenAt, two: g.playerTwoSeenAt };
+  };
+  const start = new Date("2026-11-15T12:00:00.000Z");
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    vi.setSystemTime(start);
+    await readState(one, game.id, 0);
+    expect(await seen()).toEqual({ one: start, two: null });
+
+    vi.setSystemTime(start.getTime() + 4_000);
+    await readState(one, game.id, 0);
+    expect(await seen()).toEqual({ one: start, two: null });
+
+    const later = new Date(start.getTime() + 6_000);
+    vi.setSystemTime(later);
+    await readState(one, game.id, 0);
+    await readState(two, game.id, 0);
+    expect(await seen()).toEqual({ one: later, two: later });
+
+    // Someone who isn't playing leaves no trace.
+    vi.setSystemTime(start.getTime() + 20_000);
+    await readState(await player("outsider"), game.id, 0);
+    expect(await seen()).toEqual({ one: later, two: later });
+  } finally {
+    vi.useRealTimers();
+  }
+});
