@@ -122,11 +122,12 @@ async function rematch(as: Player, gameId: string) {
   );
 }
 
-async function readState(as: Player, gameId: string) {
+async function readState(as: Player, gameId: string, since?: number | string) {
+  const query = since === undefined ? "" : `?since=${since}`;
   return reply(
     await run(
       state.loader,
-      get(`/games/${gameId}/state`, { cookie: as.cookie }),
+      get(`/games/${gameId}/state${query}`, { cookie: as.cookie }),
       { id: gameId },
     ),
   );
@@ -788,4 +789,118 @@ test("the board state names the last move's column, row and seat", async () => {
   expect((await readState(two, game.id)).body).toMatchObject({
     lastMove: { row: 0, column: 3, player: 1 },
   });
+});
+
+test("state?since=n is unchanged when nothing moved, and has the new moves when something did", async () => {
+  const { one, two, game } = await activeGame();
+  expect(await readState(two, game.id, 0)).toEqual({
+    status: 200,
+    body: { unchanged: true, moveCount: 0 },
+  });
+
+  await move(one, game.id, 3);
+  await move(two, game.id, 3);
+  expect(await readState(one, game.id, 2)).toEqual({
+    status: 200,
+    body: { unchanged: true, moveCount: 2 },
+  });
+  expect(await readState(one, game.id, 1)).toEqual({
+    status: 200,
+    body: {
+      unchanged: false,
+      moveCount: 2,
+      status: "ACTIVE",
+      yourTurn: true,
+      result: null,
+      winningCells: [],
+      lastMove: { row: 1, column: 3, player: 2 },
+      moves: [{ number: 2, row: 1, column: 3, player: 2 }],
+    },
+  });
+  expect((await readState(two, game.id, 0)).body).toMatchObject({
+    unchanged: false,
+    yourTurn: false,
+    moves: [
+      { number: 1, row: 0, column: 3, player: 1 },
+      { number: 2, row: 1, column: 3, player: 2 },
+    ],
+  });
+});
+
+test("state?since=n carries the result and winning cells once the game ends", async () => {
+  const { one, two, game } = await activeGame();
+  await playToWin(one, two, game.id);
+
+  const { body } = await readState(two, game.id, 6);
+  expect(body).toEqual({
+    unchanged: false,
+    moveCount: 7,
+    status: "WON",
+    yourTurn: false,
+    result: "lost",
+    winningCells: expect.arrayContaining(
+      [0, 1, 2, 3].map((row) => ({ row, column: 0 })),
+    ),
+    lastMove: { row: 3, column: 0, player: 1 },
+    moves: [{ number: 7, row: 3, column: 0, player: 1 }],
+  });
+  expect(JSON.stringify(body)).not.toContain(one.id);
+  expect(JSON.stringify(body)).not.toContain(two.id);
+});
+
+test("state?since= ahead of the game, or not a whole number, is refused with 400", async () => {
+  const { one, game } = await activeGame();
+  await move(one, game.id, 0);
+  for (const since of ["2", "-1", "x", "1.5", ""]) {
+    expect({
+      since,
+      status: (await readState(one, game.id, since)).status,
+    }).toEqual({
+      since,
+      status: 400,
+    });
+  }
+});
+
+test("a non-player polling state?since=n gets 404", async () => {
+  const { game } = await activeGame();
+  const outsider = await player("outsider");
+  expect((await readState(outsider, game.id, 0)).status).toBe(404);
+});
+
+test("a poll records when that player last saw the game, at most every 5 s", async () => {
+  const { one, two, game } = await activeGame();
+  const seen = async () => {
+    const g = await db.game.findUniqueOrThrow({ where: { id: game.id } });
+    return { one: g.playerOneSeenAt, two: g.playerTwoSeenAt };
+  };
+  const start = new Date("2026-11-15T12:00:00.000Z");
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    vi.setSystemTime(start);
+    await readState(one, game.id, 0);
+    expect(await seen()).toEqual({ one: start, two: null });
+
+    vi.setSystemTime(start.getTime() + 4_000);
+    await readState(one, game.id, 0);
+    expect(await seen()).toEqual({ one: start, two: null });
+
+    const later = new Date(start.getTime() + 6_000);
+    vi.setSystemTime(later);
+    await readState(one, game.id, 0);
+    await readState(two, game.id, 0);
+    expect(await seen()).toEqual({ one: later, two: later });
+
+    // Nor does a refused request.
+    vi.setSystemTime(start.getTime() + 20_000);
+    expect((await readState(one, game.id, 1)).status).toBe(400);
+    expect(await seen()).toEqual({ one: later, two: later });
+
+    // Someone who isn't playing leaves no trace.
+    vi.setSystemTime(start.getTime() + 20_000);
+    await readState(await player("outsider"), game.id, 0);
+    expect(await seen()).toEqual({ one: later, two: later });
+  } finally {
+    vi.useRealTimers();
+  }
 });
