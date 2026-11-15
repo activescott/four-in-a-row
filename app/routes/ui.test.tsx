@@ -138,10 +138,11 @@ test("your-turn rows are highlighted", () => {
 test("the game list has a New game form taking the opponent's email", () => {
   const html = render("/games", Games, { games: [] });
   expect(html).toContain(">New game</h2>");
-  expect(html).toMatch(/<form method="post"[^>]*>/);
-  expect(html).toMatch(
-    /<input[^>]*id="invite-email"[^>]*name="email"[^>]*type="email"[^>]*required/,
-  );
+  expect(html).toMatch(/<form[^>]*action="\/games" method="post"/);
+  const input = html.match(/<input[^>]*id="invite-email"[^>]*>/)?.[0] ?? "";
+  expect(input).toMatch(/type="email"/);
+  expect(input).toMatch(/name="email"/);
+  expect(input).toMatch(/required/);
   expect(html).toMatch(/<label for="invite-email"[^>]*>Your opponent/);
   expect(html).toMatch(
     /<button type="submit"[^>]*class="[^"]*min-h-11[^"]*"[^>]*>Invite<\/button>/,
