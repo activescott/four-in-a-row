@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { GameState, StateUpdate } from "./games.server";
-import { applyUpdate, isLive, readPoll, startPolling } from "./live";
+import {
+  applyUpdate,
+  isLive,
+  latestState,
+  readPoll,
+  startPolling,
+} from "./live";
 import { emptyBoard } from "./rules";
 
 // A stand-in for `document`: its visibility can be flipped, and it fires
@@ -149,7 +155,7 @@ function update(overrides: Partial<StateUpdate> = {}): StateUpdate {
 }
 
 test("applies new moves to the board with the turn, last move and result", () => {
-  const next = applyUpdate(state(), update());
+  const next = applyUpdate("g1", state(), update());
   expect(next).toMatchObject({
     moveCount: 1,
     yourTurn: true,
@@ -158,6 +164,7 @@ test("applies new moves to the board with the turn, last move and result", () =>
   expect(next.board[0]![3]).toBe(1);
 
   const won = applyUpdate(
+    "g1",
     next,
     update({
       moveCount: 3,
@@ -183,15 +190,17 @@ test("applies new moves to the board with the turn, last move and result", () =>
 
 test("keeps the state when nothing changed or the answer is out of date", () => {
   const current = state({ moveCount: 1 });
-  expect(applyUpdate(current, { unchanged: true, moveCount: 1 })).toBe(current);
+  expect(applyUpdate("g1", current, { unchanged: true, moveCount: 1 })).toBe(
+    current,
+  );
   // A poll sent before the page reloaded after the player's own move.
-  expect(applyUpdate(current, update())).toBe(current);
+  expect(applyUpdate("g1", current, update())).toBe(current);
   // Moves that don't follow on from this board can't be applied.
   const gap = update({
     moveCount: 3,
     moves: [{ number: 3, row: 0, column: 0, player: 1 }],
   });
-  expect(applyUpdate(current, gap)).toBe(current);
+  expect(applyUpdate("g1", current, gap)).toBe(current);
 });
 
 // A fetch Response as the browser hands it over. `redirected` can't be set
@@ -228,4 +237,25 @@ test("polls only a game still being played", () => {
   // Nothing can change once the game ends.
   expect(isLive(state({ status: "WON" }))).toBe(false);
   expect(isLive(state({ status: "DRAW" }))).toBe(false);
+});
+
+test("drops a poll's answer once the page has moved to another game", () => {
+  // The poll was for g1; the page now shows the rematch, g2.
+  const rematch = state({ id: "g2" });
+  expect(applyUpdate("g1", rematch, update())).toBe(rematch);
+});
+
+test("a loader result replaces the polled state unless it is older", () => {
+  const polled = state({ moveCount: 3 });
+  // The reload after the player's own move.
+  const reloaded = state({ moveCount: 4 });
+  expect(latestState(polled, reloaded)).toBe(reloaded);
+  // Same move count: the loader's copy is as new, and it carries the truth.
+  const same = state({ moveCount: 3 });
+  expect(latestState(polled, same)).toBe(same);
+  // A reload that started before the poll's newer moves arrived.
+  expect(latestState(polled, state({ moveCount: 2 }))).toBe(polled);
+  // Another game (a rematch) always replaces it.
+  const rematch = state({ id: "g2", moveCount: 0 });
+  expect(latestState(polled, rematch)).toBe(rematch);
 });
