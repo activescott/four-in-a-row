@@ -1,3 +1,6 @@
+import { InMemoryChallengeStore } from "@activescott/auth";
+import { NodemailerTransport } from "@activescott/auth-provider-email";
+import type { SendMailOptions } from "nodemailer";
 import { afterAll, expect, test, vi } from "vitest";
 import type { PrismaClient } from "../generated/prisma/client";
 import { createPgliteDb } from "../pglite.server";
@@ -109,10 +112,10 @@ async function followMagicLink(jar: CookieJar, magicLink: string) {
   return response;
 }
 
-// An existing account, so the gate allows it; each test uses its own address
-// to stay under the library's per-recipient rate limit.
+// An existing, approved account, so the gate allows it; each test uses its
+// own address to stay under the library's per-recipient rate limit.
 async function member(email: string) {
-  await db.user.create({ data: { email } });
+  await db.user.create({ data: { email, approvedAt: new Date() } });
   return email;
 }
 
@@ -211,23 +214,59 @@ test.each(OFF_SITE)(
   },
 );
 
-test("an address the gate does not allow is refused and no mail is sent", async () => {
-  const jar = new CookieJar();
+test("the sign-in email comes from Four in a Row, with its name in the subject once", async () => {
+  const { emailConfig } = await import("../auth.server");
+  const transport = new NodemailerTransport();
+  const sent: SendMailOptions[] = [];
+  Object.assign(transport, {
+    transporter: {
+      sendMail: async (options: SendMailOptions) => sent.push(options),
+    },
+  });
 
-  const response = await requestEmail(jar, "stranger@example.com", "/profile");
+  await transport.sendMagicLink(
+    "b@example.com",
+    "http://localhost/l",
+    emailConfig,
+    {
+      code: "123456",
+    },
+  );
 
-  expect(response.status).toBe(302);
-  expect(response.headers.get("location")).toBe("/login?error=NOT_INVITED");
+  expect(sent[0]).toMatchObject({
+    from: '"Four in a Row" <noreply@example.com>',
+    subject: "Sign in to Four in a Row",
+  });
+});
+
+// #43: the answer must not say whether an address has an account or an
+// invite, so a refused address gets what an allowed one gets, cookie and all.
+test("an address the gate does not allow gets the same answer as one it allows, and no mail", async () => {
+  const shape = (response: Response) => ({
+    status: response.status,
+    location: response.headers.get("location"),
+    setCookie: response.headers
+      .getSetCookie()
+      .map((cookie) => cookie.replace(/=[^;]*/, "=<id>")),
+  });
+  const allowed = await requestEmail(
+    new CookieJar(),
+    await member("allowed-twin@example.com"),
+    "/profile",
+  );
+
+  const refused = await requestEmail(
+    new CookieJar(),
+    "stranger@example.com",
+    "/profile",
+  );
+
+  expect(shape(refused)).toEqual(shape(allowed));
+  expect(shape(refused).location).toMatch(/[?&]sent=1/);
   expect((await readCapturedEmail("stranger@example.com")).status).toBe(404);
   expect(
     await db.user.count({ where: { email: "stranger@example.com" } }),
   ).toBe(0);
-
-  const page = await run(login.loader, get("/login?error=NOT_INVITED"));
-  expect(page).toMatchObject({
-    errorCode: "NOT_INVITED",
-    error: expect.stringMatching(/invite/i),
-  });
 });
 
 test("a request for a host other than APP_URL's is refused and no mail is sent", async () => {
@@ -298,6 +337,127 @@ test("a wrong code is refused and logs auth.signin.failed", async () => {
   expect(events("auth.signin.failed")).toContainEqual(
     expect.objectContaining({ provider: "email", code: "INVALID_CREDENTIALS" }),
   );
+});
+
+// The library stores a live code for every initiate, a refused address's
+// too (#43), so the gate must refuse the account at verify. Here the address
+// was invited when the code went out and the invite has lapsed since, which
+// gives the test a correct code for an address the gate no longer allows.
+// A correct code in `jar` for `email`, which the gate no longer allows.
+async function lapsedInviteCode(email: string) {
+  const { id: inviterId } = await db.user.create({
+    data: { email: `inviter-of-${email}`, approvedAt: new Date() },
+  });
+  const game = await db.game.create({
+    data: { playerOneId: inviterId, status: "INVITED" },
+  });
+  const invite = await db.invite.create({
+    data: {
+      gameId: game.id,
+      inviterId,
+      email,
+      tokenHash: `hash-${email}`,
+      expiresAt: new Date(Date.now() + 60_000),
+    },
+  });
+  const jar = new CookieJar();
+  await requestEmail(jar, email);
+  const { code } = await (await readCapturedEmail(email)).json();
+  await db.invite.update({
+    where: { id: invite.id },
+    data: { expiresAt: new Date(Date.now() - 1) },
+  });
+  return { jar, code: code as string };
+}
+
+function verifyCode(jar: CookieJar, code: string) {
+  return auth(
+    formPost(
+      "/auth/email/verify",
+      { code },
+      { cookie: jar.header(), referer: "/login" },
+    ),
+  );
+}
+
+const sessionCookie = (response: Response) =>
+  /(^|, )session=[^;]/.test(response.headers.getSetCookie().join(", "));
+
+test("a correct code for an address the gate does not allow is refused and leaves no account", async () => {
+  const email = "lapsed-invitee@example.com";
+  const { jar, code } = await lapsedInviteCode(email);
+
+  const response = await verifyCode(jar, code);
+
+  expect(response.status).toBe(302);
+  expect(response.headers.get("location")).toMatch(
+    /^\/login\?error=INVALID_CREDENTIALS/,
+  );
+  expect(sessionCookie(response)).toBe(false);
+  expect(await db.user.count({ where: { email } })).toBe(0);
+  expect(await db.identity.count({ where: { identifier: email } })).toBe(0);
+});
+
+// Two verifies of one correct code, forced into the order that let the
+// second one in: both pass the code check before either consumes the
+// challenge, A inserts the users row and is held before its identity
+// insert, and B finds A's row, inserts its identity and returns while A is
+// still held. Under a connection pool this needs no help, just bad luck.
+test("the same correct code verified twice at once is refused both times and leaves no account", async () => {
+  const email = "raced-invitee@example.com";
+  const { jar, code } = await lapsedInviteCode(email);
+  const signal = () => {
+    let resolve!: () => void;
+    const promise = new Promise<void>((r) => (resolve = r));
+    return { promise, resolve };
+  };
+  const bAtConsume = signal();
+  const aAtIdentity = signal();
+  const bReturned = signal();
+
+  const consume = InMemoryChallengeStore.prototype.delete;
+  const consumeSpy = vi
+    .spyOn(InMemoryChallengeStore.prototype, "delete")
+    .mockImplementationOnce(async function (this: InMemoryChallengeStore, id) {
+      await bAtConsume.promise;
+      return consume.call(this, id);
+    })
+    .mockImplementationOnce(async function (this: InMemoryChallengeStore, id) {
+      bAtConsume.resolve();
+      await aAtIdentity.promise;
+      return consume.call(this, id);
+    });
+  const create = db.identity.create.bind(db.identity);
+  const createSpy = vi.spyOn(db.identity, "create").mockImplementationOnce(((
+    args: Parameters<typeof create>[0],
+  ) => {
+    aAtIdentity.resolve();
+    return bReturned.promise.then(() => create(args));
+  }) as unknown as typeof create);
+
+  const posts = [verifyCode(jar, code), verifyCode(jar, code)].map((post) =>
+    post.catch((error: unknown) => error),
+  );
+  // A is held until B returns, so the first to settle is B.
+  const b = await Promise.race(posts);
+  bReturned.resolve();
+  const results = await Promise.all(posts);
+  expect(createSpy).toHaveBeenCalledTimes(2);
+  consumeSpy.mockRestore();
+  createSpy.mockRestore();
+
+  expect(b).toBeInstanceOf(Response);
+  expect((b as Response).headers.get("location")).toMatch(
+    /^\/login\?error=INVALID_CREDENTIALS/,
+  );
+  for (const result of results) {
+    if (result instanceof Response) {
+      expect(result.headers.get("location")).not.toBe("/profile");
+      expect(sessionCookie(result)).toBe(false);
+    }
+  }
+  expect(await db.user.count({ where: { email } })).toBe(0);
+  expect(await db.identity.count({ where: { identifier: email } })).toBe(0);
 });
 
 test("logout clears the session", async () => {

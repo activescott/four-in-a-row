@@ -24,6 +24,8 @@ test("create makes a User row for an email identity and findById reads it back",
   const row = await db.user.findUniqueOrThrow({ where: { id: created.id } });
   expect(row.email).toBe("alice@example.com");
   const found = await store.findById(created.id);
+  // Only the sign-up gate approves an account.
+  expect(row.approvedAt).toBeNull();
   expect(found).toEqual({
     id: created.id,
     metadata: {

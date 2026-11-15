@@ -1,8 +1,11 @@
 import { data } from "react-router";
 import { requireAuth } from "../auth.server";
 import { getDb } from "../db.server";
+import { appUrl } from "../app-url.server";
 import { makeMove } from "../game/games.server";
+import { notifyTurn } from "../game/turn-email.server";
 import { logger } from "../logger.server";
+import { mailer } from "../mail/mailer.server";
 import type { Route } from "./+types/games.$id.moves";
 
 // POST /games/:id/moves with { column, expectedMoveCount }.
@@ -19,7 +22,8 @@ export async function action({ request, params }: Route.ActionArgs) {
       { status: 400 },
     );
   }
-  const result = await makeMove(await getDb(), {
+  const db = await getDb();
+  const result = await makeMove(db, {
     gameId: params.id,
     userId: user.id,
     column,
@@ -32,6 +36,14 @@ export async function action({ request, params }: Route.ActionArgs) {
       column,
       moveNumber: result.moveNumber,
     });
+    // The move has committed: a failure here must not report it as refused.
+    await notifyTurn(db, mailer, {
+      gameId: params.id,
+      moveNumber: result.moveNumber,
+      appUrl: appUrl(request),
+    }).catch((err: unknown) =>
+      logger.error({ event: "email.turn.failed", ...log, err }),
+    );
     return { ok: true as const, error: null };
   }
   logger.info({ event: "move.rejected", ...log, reason: result.error });

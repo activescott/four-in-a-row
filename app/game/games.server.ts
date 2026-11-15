@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../generated/prisma/client";
+import type { GameStatus, PrismaClient } from "../generated/prisma/client";
 import { logger } from "../logger.server";
 import { applyMove, boardFromMoves, outcome, type Player } from "./rules";
 
@@ -48,10 +48,12 @@ export async function makeMove(
 
     const next = outcome(result.board, result.move);
     const other = seat === 1 ? game.playerTwoId : game.playerOneId;
-    // Conditional on the count read above: a concurrent move that got here
-    // first leaves zero rows to update. @@unique([gameId, number]) backs it up.
+    // Conditional on the count and status read above: a concurrent move that
+    // got here first, or an invite accepted since (which `other` above
+    // predates), leaves zero rows to update. @@unique([gameId, number]) backs
+    // it up.
     const { count } = await tx.game.updateMany({
-      where: { id: gameId, moveCount: game.moveCount },
+      where: { id: gameId, moveCount: game.moveCount, status: game.status },
       data: {
         moveCount: game.moveCount + 1,
         nextPlayerId: next.status === "ongoing" ? other : null,
@@ -140,12 +142,18 @@ export function gameState(game: GameWithMoves, userId: string) {
 export type GameState = ReturnType<typeof gameState>;
 
 /**
- * What changed since the client's move count: "unchanged", or the moves
- * after it with the status. Null when `since` is ahead of the game.
+ * What changed since the client's move count and status: "unchanged", or the
+ * moves after it with the status. A status change with no move (an accepted
+ * invite) counts as a change. Null when `since` is ahead of the game.
  */
-export function stateSince(game: GameWithMoves, userId: string, since: number) {
+export function stateSince(
+  game: GameWithMoves,
+  userId: string,
+  since: number,
+  status?: GameStatus,
+) {
   if (since > game.moveCount) return null;
-  if (since === game.moveCount) {
+  if (since === game.moveCount && (!status || status === game.status)) {
     return { unchanged: true as const, moveCount: game.moveCount };
   }
   const state = gameState(game, userId);
@@ -189,6 +197,7 @@ export async function listGames(db: PrismaClient, userId: string) {
   const games = await db.game.findMany({
     where: { OR: [{ playerOneId: userId }, { playerTwoId: userId }] },
     orderBy: { createdAt: "desc" },
+    include: { invite: { select: { email: true } } },
   });
   const opponentIds = games
     .map((g) => (g.playerOneId === userId ? g.playerTwoId : g.playerOneId))
@@ -203,12 +212,44 @@ export async function listGames(db: PrismaClient, userId: string) {
       status: game.status,
       opponentSeat: (game.playerOneId === userId ? 2 : 1) as Player,
       opponent: opponentId ? (emails.get(opponentId) ?? null) : null,
+      invited: invitedEmail(game, userId),
       yourTurn: game.nextPlayerId === userId,
       result: resultFor(game, userId),
     };
   });
   // Array.sort is stable, so the newest-first order holds inside each group.
   return rows.sort((a, b) => Number(b.yourTurn) - Number(a.yourTurn));
+}
+
+/**
+ * The address the user invited to this game while it waits for them to
+ * join, or null. Only the inviter is ever shown it.
+ */
+function invitedEmail(
+  game: {
+    status: GameStatus;
+    playerOneId: string;
+    invite: { email: string } | null;
+  },
+  userId: string,
+) {
+  return game.status === "INVITED" && game.playerOneId === userId
+    ? (game.invite?.email ?? null)
+    : null;
+}
+
+/** invitedEmail for one game, looked up. */
+export async function invitedEmailFor(
+  db: PrismaClient,
+  game: { id: string; status: GameStatus; playerOneId: string },
+  userId: string,
+) {
+  if (game.status !== "INVITED" || game.playerOneId !== userId) return null;
+  const invite = await db.invite.findUnique({
+    where: { gameId: game.id },
+    select: { email: true },
+  });
+  return invitedEmail({ ...game, invite }, userId);
 }
 
 export type RematchOutcome =

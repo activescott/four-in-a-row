@@ -70,7 +70,9 @@ export default function Login({ loaderData }: Route.ComponentProps) {
           className="flex flex-col gap-3"
         >
           <p role="status" className="text-green-800">
-            Check your email for a sign-in link and code.
+            Check your email for a sign-in link and code. Only an address that
+            has played or been invited gets one, so if nothing arrives, ask a
+            player to invite you.
           </p>
           <label htmlFor="code">Or enter the code</label>
           <input

@@ -1,13 +1,13 @@
-import { afterAll, beforeAll, expect, test } from "vitest";
+import type {
+  EmailProviderConfig,
+  EmailTransport,
+} from "@activescott/auth-provider-email";
+import { afterAll, beforeAll, expect, test, vi } from "vitest";
 import type { PrismaClient } from "../generated/prisma/client";
 import { createLogger } from "../logger.server";
 import { createPgliteDb } from "../pglite.server";
 import { logCapture } from "../test/routes";
-import {
-  createSignupGate,
-  NOT_INVITED,
-  parseSignupEmails,
-} from "./signup-gate.server";
+import { createSignupGate, parseSignupEmails } from "./signup-gate.server";
 
 let db: PrismaClient;
 
@@ -22,7 +22,16 @@ afterAll(async () => {
 function gate(signupEmails?: string) {
   const capture = logCapture();
   const logger = createLogger(capture.destination);
-  return { gate: createSignupGate({ db, signupEmails, logger }), capture };
+  const signup = createSignupGate({ db, signupEmails, logger });
+  const inner = {
+    sendMagicLink: vi.fn<EmailTransport["sendMagicLink"]>(async () => true),
+  };
+  return {
+    gate: signup.gate,
+    transport: signup.transport(inner),
+    inner,
+    capture,
+  };
 }
 
 const request = new Request("http://localhost/auth/email/initiate", {
@@ -35,6 +44,21 @@ const attempt = (identifier: string) => ({
   request,
 });
 
+const CONFIG = {} as EmailProviderConfig;
+const LINK = "http://localhost/auth/email/verify?challenge=c&key=k";
+
+// The sign-in email for this address: true for every address, and whether
+// the inner transport was asked to send it.
+async function signInMail(signup: ReturnType<typeof gate>, email: string) {
+  const answer = await signup.transport.sendMagicLink(email, LINK, CONFIG, {
+    code: "123456",
+  });
+  return {
+    answer,
+    sent: signup.inner.sendMagicLink.mock.calls.some(([to]) => to === email),
+  };
+}
+
 test("parseSignupEmails splits on commas and whitespace and lowercases", () => {
   expect(
     parseSignupEmails(" One@Example.com, two@example.com\nthree@example.com "),
@@ -44,15 +68,26 @@ test("parseSignupEmails splits on commas and whitespace and lowercases", () => {
   expect(parseSignupEmails(undefined)).toEqual(new Set());
 });
 
-test("allows an address that already has an account", async () => {
-  await db.user.create({ data: { email: "member@example.com" } });
-
-  expect(await gate().gate.onInitiate(attempt("member@example.com"))).toBe(
+// #43: a refused address must not get a different answer, or a stranger
+// could learn which addresses have an account or an invite.
+test("the gate lets every initiate through, a stranger's too", async () => {
+  expect(await gate().gate.onInitiate(attempt("stranger@example.com"))).toBe(
     "allow",
   );
 });
 
-test("allows an address with a pending invite, matching case-insensitively", async () => {
+test("sends to an address that already has an account", async () => {
+  await db.user.create({
+    data: { email: "member@example.com", approvedAt: new Date() },
+  });
+
+  expect(await signInMail(gate(), "member@example.com")).toEqual({
+    answer: true,
+    sent: true,
+  });
+});
+
+test("sends to an address with a pending invite, matching case-insensitively", async () => {
   const inviter = await db.user.create({
     data: { email: "inviter@example.com" },
   });
@@ -64,15 +99,18 @@ test("allows an address with a pending invite, matching case-insensitively", asy
       gameId: game.id,
       inviterId: inviter.id,
       email: "Invitee@Example.com",
+      tokenHash: "hash-pending",
+      expiresAt: new Date(Date.now() + 60_000),
     },
   });
 
-  expect(await gate().gate.onInitiate(attempt("invitee@example.com"))).toBe(
-    "allow",
-  );
+  expect(await signInMail(gate(), "invitee@example.com")).toEqual({
+    answer: true,
+    sent: true,
+  });
 });
 
-test("refuses an address whose only invite was already accepted", async () => {
+test("sends nothing to an address whose only invite was already accepted", async () => {
   const inviter = await db.user.create({
     data: { email: "inviter2@example.com" },
   });
@@ -85,48 +123,146 @@ test("refuses an address whose only invite was already accepted", async () => {
       inviterId: inviter.id,
       email: "accepted@example.com",
       acceptedAt: new Date(),
+      tokenHash: "hash-accepted",
+      expiresAt: new Date(Date.now() + 60_000),
     },
   });
 
-  expect(await gate().gate.onInitiate(attempt("accepted@example.com"))).toEqual(
-    {
-      redirect: `/login?error=${NOT_INVITED}`,
+  expect(await signInMail(gate(), "accepted@example.com")).toEqual({
+    answer: true,
+    sent: false,
+  });
+});
+
+test("sends nothing to an address whose only invite has expired", async () => {
+  const inviter = await db.user.create({
+    data: { email: "inviter3@example.com" },
+  });
+  const game = await db.game.create({
+    data: { playerOneId: inviter.id, status: "INVITED" },
+  });
+  await db.invite.create({
+    data: {
+      gameId: game.id,
+      inviterId: inviter.id,
+      email: "expired@example.com",
+      tokenHash: "hash-expired",
+      expiresAt: new Date(Date.now() - 1),
     },
+  });
+
+  expect(await signInMail(gate(), "expired@example.com")).toEqual({
+    answer: true,
+    sent: false,
+  });
+});
+
+test("sends to an address in SIGNUP_EMAILS", async () => {
+  expect(
+    await signInMail(
+      gate("seed@example.com, other@example.com"),
+      "seed@example.com",
+    ),
+  ).toEqual({ answer: true, sent: true });
+});
+
+test("sends nothing to any other address and logs auth.signin.failed without the address", async () => {
+  const signup = gate("seed@example.com");
+
+  expect(await signInMail(signup, "stranger@example.com")).toEqual({
+    answer: true,
+    sent: false,
+  });
+  expect(signup.capture.events("auth.signin.failed")).toMatchObject([
+    { provider: "email", reason: "not_invited" },
+  ]);
+  expect(JSON.stringify(signup.capture.lines)).not.toContain(
+    "stranger@example.com",
   );
 });
 
-test("allows an address in SIGNUP_EMAILS", async () => {
-  const { gate: seeded } = gate("seed@example.com, other@example.com");
+test("never waits for the relay, so a send takes no longer than a refusal", async () => {
+  await db.user.create({
+    data: { email: "slow-relay@example.com", approvedAt: new Date() },
+  });
+  const signup = gate();
+  signup.inner.sendMagicLink.mockReturnValue(new Promise(() => {}));
+  const timeout = new Promise((resolve) =>
+    setTimeout(resolve, 1_000, "waited"),
+  );
 
-  expect(await seeded.onInitiate(attempt("seed@example.com"))).toBe("allow");
+  const answer = await Promise.race([
+    signup.transport.sendMagicLink("slow-relay@example.com", LINK, CONFIG),
+    timeout,
+  ]);
+
+  expect(answer).toBe(true);
+  expect(signup.inner.sendMagicLink).toHaveBeenCalledOnce();
 });
 
-test("refuses any other address and logs auth.signin.failed without the address", async () => {
-  const { gate: closed, capture } = gate("seed@example.com");
+test("a send that fails in the background is logged as email.signin.failed", async () => {
+  await db.user.create({
+    data: { email: "relay-down@example.com", approvedAt: new Date() },
+  });
+  const signup = gate();
+  signup.inner.sendMagicLink.mockResolvedValue(false);
 
-  const decision = await closed.onInitiate(attempt("stranger@example.com"));
+  await signup.transport.sendMagicLink("relay-down@example.com", LINK, CONFIG);
+  await vi.waitFor(() =>
+    expect(signup.capture.events("email.signin.failed")).toHaveLength(1),
+  );
+  expect(JSON.stringify(signup.capture.lines)).not.toContain(
+    "relay-down@example.com",
+  );
+});
 
-  expect(decision).toEqual({ redirect: `/login?error=${NOT_INVITED}` });
-  expect(capture.events("auth.signin.failed")).toMatchObject([
-    { provider: "email", reason: "not_invited" },
-  ]);
-  expect(JSON.stringify(capture.lines)).not.toContain("stranger@example.com");
+test("every address costs the same lookups, whichever one would match", async () => {
+  const lookups: string[] = [];
+  const counting = {
+    user: {
+      findUnique: async () => {
+        lookups.push("user");
+        return null;
+      },
+    },
+    invite: {
+      findFirst: async () => {
+        lookups.push("invite");
+        return null;
+      },
+    },
+  } as unknown as PrismaClient;
+  const signup = createSignupGate({
+    db: counting,
+    signupEmails: "seed@example.com",
+    logger: createLogger(logCapture().destination),
+  });
+  const transport = signup.transport({ sendMagicLink: async () => true });
+
+  for (const email of ["seed@example.com", "stranger@example.com"]) {
+    lookups.length = 0;
+    await transport.sendMagicLink(email, LINK, CONFIG);
+    expect(lookups.sort()).toEqual(["invite", "user"]);
+  }
 });
 
 test("onVerified logs auth.signin.succeeded with the user id and allows the session", async () => {
   const { gate: open, capture } = gate();
-  const user = { id: "user-1" };
+  const { id } = await db.user.create({
+    data: { email: "returning-member@example.com", approvedAt: new Date() },
+  });
+  const user = { id };
   const identity = {
     id: "identity-1",
-    userId: "user-1",
+    userId: id,
     provider: "email",
-    identifier: "member@example.com",
+    identifier: "returning-member@example.com",
     providerState: {},
     createdAt: new Date(),
   };
 
   const decision = await open.onVerified!({
-    ...attempt("member@example.com"),
+    ...attempt("returning-member@example.com"),
     user,
     identity,
     isNewUser: false,
@@ -134,9 +270,11 @@ test("onVerified logs auth.signin.succeeded with the user id and allows the sess
 
   expect(decision).toBe("allow");
   expect(capture.events("auth.signin.succeeded")).toMatchObject([
-    { userId: "user-1", provider: "email", isNewUser: false },
+    { userId: id, provider: "email", isNewUser: false },
   ]);
-  expect(JSON.stringify(capture.lines)).not.toContain("member@example.com");
+  expect(JSON.stringify(capture.lines)).not.toContain(
+    "returning-member@example.com",
+  );
 });
 
 test("onVerified does not log a sign-in for a link to the signed-in account", async () => {
@@ -158,4 +296,140 @@ test("onVerified does not log a sign-in for a link to the signed-in account", as
   });
 
   expect(capture.events("auth.signin.succeeded")).toEqual([]);
+});
+
+// What the verify hands onVerified for an address with no identity yet: the
+// user store's row (approved only if the test says so) and the identity the
+// library then created for it.
+async function verifiedNewUser(email: string, { approved = false } = {}) {
+  const row = await db.user.upsert({
+    where: { email },
+    create: { email, approvedAt: approved ? new Date() : null },
+    update: {},
+  });
+  const identity = await db.identity.create({
+    data: { userId: row.id, provider: "email", identifier: email },
+  });
+  return {
+    ...attempt(email),
+    user: { id: row.id, metadata: { email } },
+    identity: {
+      id: identity.id,
+      userId: row.id,
+      provider: "email",
+      identifier: email,
+      providerState: {},
+      createdAt: identity.createdAt,
+    },
+    isNewUser: true,
+  };
+}
+test("onVerified refuses a new account for an address with no invite and deletes what the verify created", async () => {
+  const { gate: open, capture } = gate("seed@example.com");
+  const input = await verifiedNewUser("guessed@example.com");
+
+  const decision = await open.onVerified!(input);
+
+  expect(decision).toEqual({
+    error: expect.objectContaining({ code: "INVALID_CREDENTIALS" }),
+  });
+  expect(await db.user.count({ where: { id: input.user.id } })).toBe(0);
+  expect(
+    await db.identity.count({ where: { identifier: "guessed@example.com" } }),
+  ).toBe(0);
+  expect(capture.events("auth.signin.failed")).toMatchObject([
+    { provider: "email", reason: "not_invited" },
+  ]);
+  expect(capture.events("auth.signin.succeeded")).toEqual([]);
+  expect(JSON.stringify(capture.lines)).not.toContain("guessed@example.com");
+});
+
+test("onVerified allows a new account for an address with a pending invite", async () => {
+  const inviter = await db.user.create({
+    data: { email: "inviter4@example.com" },
+  });
+  const game = await db.game.create({
+    data: { playerOneId: inviter.id, status: "INVITED" },
+  });
+  await db.invite.create({
+    data: {
+      gameId: game.id,
+      inviterId: inviter.id,
+      email: "New-Invitee@Example.com",
+      tokenHash: "hash-new-invitee",
+      expiresAt: new Date(Date.now() + 60_000),
+    },
+  });
+  const input = await verifiedNewUser("new-invitee@example.com");
+
+  expect(await gate().gate.onVerified!(input)).toBe("allow");
+  expect(await db.user.count({ where: { id: input.user.id } })).toBe(1);
+});
+
+test("onVerified allows a new account for an address in SIGNUP_EMAILS", async () => {
+  const input = await verifiedNewUser("new-seed@example.com");
+
+  expect(await gate("new-seed@example.com").gate.onVerified!(input)).toBe(
+    "allow",
+  );
+  expect(await db.user.count({ where: { id: input.user.id } })).toBe(1);
+});
+
+test("onVerified approves the account it allows", async () => {
+  const input = await verifiedNewUser("approved-seed@example.com");
+
+  await gate("approved-seed@example.com").gate.onVerified!(input);
+
+  const row = await db.user.findUniqueOrThrow({ where: { id: input.user.id } });
+  expect(row.approvedAt).toBeInstanceOf(Date);
+});
+
+// An account whose email identity is missing gets isNewUser too. It was
+// approved when it first signed in, so it is neither refused nor deleted.
+test("onVerified allows an approved account the verify did not create", async () => {
+  const input = await verifiedNewUser("identity-less@example.com", {
+    approved: true,
+  });
+
+  expect(await gate().gate.onVerified!(input)).toBe("allow");
+  expect(await db.user.count({ where: { id: input.user.id } })).toBe(1);
+});
+
+// Whatever isNewUser says: a verify that finds the row another verify of the
+// same code inserted, or a row a failed delete left, is still unapproved.
+test("onVerified refuses and deletes an unapproved account that is not new", async () => {
+  const input = await verifiedNewUser("not-new@example.com");
+
+  const decision = await gate().gate.onVerified!({
+    ...input,
+    isNewUser: false,
+  });
+
+  expect(decision).toEqual({
+    error: expect.objectContaining({ code: "INVALID_CREDENTIALS" }),
+  });
+  expect(await db.user.count({ where: { id: input.user.id } })).toBe(0);
+});
+
+test("a row left by a failed delete gets no mail and is refused on the next verify", async () => {
+  const signup = gate();
+  const input = await verifiedNewUser("failed-delete@example.com");
+  const deleteMany = vi
+    .spyOn(db.user, "deleteMany")
+    .mockRejectedValueOnce(new Error("connection lost"));
+
+  await expect(signup.gate.onVerified!(input)).rejects.toThrow();
+  deleteMany.mockRestore();
+  expect(await db.user.count({ where: { id: input.user.id } })).toBe(1);
+
+  expect(await signInMail(signup, "failed-delete@example.com")).toEqual({
+    answer: true,
+    sent: false,
+  });
+  expect(await signup.gate.onVerified!({ ...input, isNewUser: false })).toEqual(
+    {
+      error: expect.objectContaining({ code: "INVALID_CREDENTIALS" }),
+    },
+  );
+  expect(await db.user.count({ where: { id: input.user.id } })).toBe(0);
 });

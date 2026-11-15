@@ -16,10 +16,11 @@ import {
   PasskeyProvider,
 } from "@activescott/auth-provider-passkey";
 import { createPrismaIdentityStore } from "@activescott/auth-store-prisma";
-import { createSignupGate, NOT_INVITED } from "./auth/signup-gate.server";
+import { createSignupGate } from "./auth/signup-gate.server";
 import { createUserStore } from "./auth/user-store.server";
 import { getDb } from "./db.server";
 import { logger } from "./logger.server";
+import { fromHeader, smtp } from "./mail/mailer.server";
 
 const env = process.env;
 const production = env.NODE_ENV === "production";
@@ -51,26 +52,30 @@ export const captureEmailTransport = e2eTestMode
   ? new CaptureEmailTransport(notSent)
   : null;
 
-const emailConfig = validateEmailConfig({
-  smtp: {
-    host: env.SMTP_HOST ?? (production ? "" : "localhost"),
-    port: Number(env.SMTP_PORT ?? 587),
-    secure: env.SMTP_SECURE === "true",
-    user: env.SMTP_USER ?? (production ? "" : "dev"),
-    pass: env.SMTP_PASS ?? (production ? "" : "dev"),
-  },
-  from: env.FROM_EMAIL ?? (production ? "" : "noreply@localhost.test"),
+// The library's subject is "<subject> to <appName>".
+export const emailConfig = validateEmailConfig({
+  smtp,
+  from: fromHeader,
   template: {
     appName: "Four in a Row",
-    subject: "Sign in to Four in a Row",
+    subject: "Sign in",
   },
 });
 
-const emailTransport =
-  captureEmailTransport ??
-  new NodemailerTransport(!production && !smtpConfigured);
-
 const db = await getDb();
+const signup = createSignupGate({
+  db,
+  signupEmails: env.SIGNUP_EMAILS,
+  logger,
+});
+
+// The sign-up gate decides here, not before the send, which addresses get
+// mail; see createSignupGate.
+const emailTransport = signup.transport(
+  captureEmailTransport ??
+    new NodemailerTransport(!production && !smtpConfigured),
+);
+
 const jwtSecret = secret("JWT_SECRET");
 
 export const auth = new Auth({
@@ -91,7 +96,7 @@ export const auth = new Auth({
   }),
   // One replica for now; a database-backed store is activescott/auth#154 (G2).
   challengeStore: new InMemoryChallengeStore(),
-  gate: createSignupGate({ db, signupEmails: env.SIGNUP_EMAILS, logger }),
+  gate: signup.gate,
   logger: {
     warn: (message, context) =>
       logger.warn({ event: "auth.warn", ...context }, message),
@@ -147,10 +152,17 @@ export const { handleAuth, getSession, requireAuth, optionalAuth, logout } =
     },
   });
 
+// The magic link's host comes from the request (Host, or X-Forwarded-Host
+// behind Traefik), so a forged one would mail out a link to another site.
+// Production requires APP_URL, so there only its host is served.
+export function serveAuth(request: Request) {
+  const appUrl = env.APP_URL;
+  if (appUrl && new URL(request.url).host !== new URL(appUrl).host) {
+    return new Response("Misdirected Request", { status: 421 });
+  }
+  return handleAuth({ request });
+}
+
 export const { signInLoader, profileAuthLoader } = createAuthPageLoaders(auth, {
   listPasskeys,
-  errorMessages: {
-    [NOT_INVITED]:
-      "That address isn't signed up for Four in a Row. Ask a player to invite you.",
-  },
 });

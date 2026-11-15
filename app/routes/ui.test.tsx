@@ -5,6 +5,7 @@ import type { GameState } from "../game/games.server";
 import { emptyBoard } from "../game/rules";
 import Board from "./games.$id";
 import Games from "./games";
+import Invite from "./invite.$key";
 
 // Renders a route component the way React Router would with this loader data.
 function render(path: string, Component: unknown, loaderData: unknown) {
@@ -107,6 +108,50 @@ test("after a win the other discs get a lighter tint, never an opacity fade", ()
   expect(html).toContain("bg-amber-200");
 });
 
+const invitedBoard = (overrides: Partial<GameState> = {}) =>
+  render("/games/:id", Board, {
+    game: state({
+      status: "INVITED",
+      board: emptyBoard(),
+      moveCount: 0,
+      lastMove: null,
+      ...overrides,
+    }),
+    emails: { 1: "alice@example.com", 2: null },
+    invitedEmail: "bob@example.com",
+  });
+
+test("right after inviting, the board says who was emailed and that you can move first", () => {
+  const html = invitedBoard().replace(/<!-- -->/g, "");
+  expect(html).toMatch(
+    /<p role="status" class="[^"]*text-lg text-slate-800[^"]*"><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg><span>We emailed an invite to <strong>bob@example.com<\/strong>\. You can play your first move now\.<\/span><\/p>/,
+  );
+  expect(html).toContain("bob (invited)");
+  expect(html).not.toContain("Invited player");
+});
+
+test("once the inviter has moved, the board still says who was invited", () => {
+  const html = invitedBoard({ yourTurn: false, moveCount: 1 }).replace(
+    /<!-- -->/g,
+    "",
+  );
+  expect(html).toContain(
+    "We emailed an invite to <strong>bob@example.com</strong>.</span>",
+  );
+  expect(html).not.toContain("first move");
+});
+
+test("a game list row waiting on a join names the invited player", () => {
+  const html = render("/games", Games, {
+    games: [
+      { ...row("g1", "", false), opponent: null, invited: "bob@example.com" },
+    ],
+  }).replace(/<!-- -->/g, "");
+  expect(html).toContain("bob (invited)");
+  expect(html).toContain("Waiting for your opponent to join");
+  expect(html).not.toContain("Invited player");
+});
+
 const row = (id: string, opponent: string, yourTurn: boolean) => ({
   id,
   status: "ACTIVE",
@@ -132,4 +177,93 @@ test("your-turn rows are highlighted", () => {
     ],
   });
   expect(html.match(/border-l-4/g)).toHaveLength(1);
+});
+
+test("the game list has a New game form asking who to play", () => {
+  const html = render("/games", Games, { games: [] });
+  expect(html).toContain(">New game</h2>");
+  expect(html).toMatch(/<form[^>]*action="\/games" method="post"/);
+  const input = html.match(/<input[^>]*id="invite-email"[^>]*>/)?.[0] ?? "";
+  expect(input).toMatch(/type="email"/);
+  expect(input).toMatch(/name="email"/);
+  expect(input).toMatch(/required/);
+  expect(html).toMatch(
+    /<label for="invite-email"[^>]*>Who do you want to play\? Enter their email\.<\/label>/,
+  );
+  expect(html).toMatch(
+    /<button type="submit"[^>]*class="[^"]*min-h-11[^"]*"[^>]*>Invite<\/button>/,
+  );
+});
+
+const pending = {
+  state: "pending",
+  inviter: "alice",
+  maskedEmail: "b•••@example.com",
+  redirectTo: "/invite/g1",
+  sent: false,
+  error: null,
+  formToken: "t",
+};
+
+test("the invite page explains the sign-in email and posts to itself, without the address", () => {
+  const html = render("/invite/:id", Invite, pending);
+  expect(html).toMatch(/alice(<!-- -->)? invited you to play Four in a Row/);
+  expect(html).toMatch(
+    /One more step\. We(&#x27;|')ll send a sign-in email to(<!-- -->)? <strong>b•••@example.com<\/strong> so we know it(&#x27;|')s you\. No password needed\./,
+  );
+  expect(html).toMatch(/<form[^>]*action="\/invite\/g1" method="post"/);
+  expect(html).not.toMatch(/name="email"/);
+  expect(html).toMatch(
+    /<button type="submit"[^>]*>Send my sign-in email<\/button>/,
+  );
+});
+
+test("after sending, the invite page says what to do with the email and labels the code", () => {
+  const html = render("/invite/:id", Invite, { ...pending, sent: true });
+  expect(html).toContain(
+    "Open the email we just sent, “Sign in to Four in a Row”, and tap the link, or type the 6-digit code here.",
+  );
+  expect(html).toMatch(/<label for="code"[^>]*>6-digit code<\/label>/);
+  expect(html).toMatch(
+    /<input[^>]*id="code"[^>]*class="[^"]*text-2xl tracking-widest/,
+  );
+});
+
+test("the passkey link on the invite page is small", () => {
+  const html = render("/invite/:id", Invite, pending);
+  expect(html).toMatch(
+    /<a[^>]*class="[^"]*text-sm[^"]*"[^>]*>Sign in with a passkey instead<\/a>/,
+  );
+});
+
+test("an expired invite page says whom to ask for a new one", () => {
+  const html = render("/invite/:id", Invite, {
+    state: "expired",
+    inviter: "alice",
+  });
+  expect(html).toMatch(
+    /This invite has expired\. Ask (<!-- -->)?alice(<!-- -->)? for a new one\./,
+  );
+});
+
+test("a used invite opened signed out offers sign-in back to the game", () => {
+  const html = render("/invite/:id", Invite, { state: "joined", gameId: "g9" });
+  expect(html).toContain(
+    "You&#x27;ve already joined this game. Sign in to play.",
+  );
+  expect(html).toMatch(
+    /<a(?=[^>]*href="\/login\?redirectTo=%2Fgames%2Fg9")(?=[^>]*w-full)[^>]*>Sign in<\/a>/,
+  );
+});
+
+test("the wrong-account page names both addresses and how to fix it", () => {
+  const html = render("/invite/:id", Invite, {
+    state: "wrong_account",
+    maskedEmail: "b•••@example.com",
+    signedInAs: "carol@example.com",
+  });
+  expect(html).toMatch(
+    /This invite is for <strong>b•••@example.com<\/strong>, but you(&#x27;|')re signed in as <strong>carol@example.com<\/strong>\. Sign out, then tap the link in the email again\./,
+  );
+  expect(html).toMatch(/>Sign out<\/button>/);
 });

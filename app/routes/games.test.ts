@@ -3,8 +3,8 @@ import type { PrismaClient } from "../generated/prisma/client";
 import { createPgliteDb } from "../pglite.server";
 import { formPost, get, logCapture, run } from "../test/routes";
 
-// Invites are a later step (#14), so these tests seed both players and the
-// game directly, and sign each player in with a session cookie from Auth.
+// These tests seed both players and the game directly (invites are in
+// invites.test.ts), and sign each player in with a session cookie from Auth.
 
 const { getDb, log } = vi.hoisted(() => ({
   getDb: vi.fn<() => Promise<PrismaClient>>(),
@@ -122,8 +122,16 @@ async function rematch(as: Player, gameId: string) {
   );
 }
 
-async function readState(as: Player, gameId: string, since?: number | string) {
-  const query = since === undefined ? "" : `?since=${since}`;
+async function readState(
+  as: Player,
+  gameId: string,
+  since?: number | string,
+  status?: string,
+) {
+  const params = new URLSearchParams();
+  if (since !== undefined) params.set("since", String(since));
+  if (status !== undefined) params.set("status", status);
+  const query = params.size ? `?${params}` : "";
   return reply(
     await run(
       state.loader,
@@ -177,6 +185,18 @@ test("a legal move drops the disc to the lowest open row and passes the turn", a
     { number: 1, playerId: one.id, column: 3, row: 0 },
     { number: 2, playerId: two.id, column: 3, row: 1 },
   ]);
+});
+
+test("a move emails the opponent that it's their turn", async () => {
+  const { captureMailer } = await import("../mail/mailer.server");
+  const { one, two, game } = await activeGame();
+
+  expect((await move(one, game.id, 3)).status).toBe(200);
+
+  expect(captureMailer!.last(two.email, "turn")).toMatchObject({
+    link: `http://localhost/games/${game.id}`,
+  });
+  expect(captureMailer!.last(one.email, "turn")).toBeNull();
 });
 
 test("a move out of turn is refused with 409 and changes nothing", async () => {
@@ -520,6 +540,48 @@ test("the game list shows each player whose turn it is and the result", async ()
   expect((await list(await player("loner"))).body.games).toEqual([]);
 });
 
+test("the inviter's list and board show whom a waiting game's invite went to", async () => {
+  const one = await player("inviter");
+  const game = await db.game.create({
+    data: { playerOneId: one.id, status: "INVITED", nextPlayerId: one.id },
+  });
+  await db.invite.create({
+    data: {
+      gameId: game.id,
+      inviterId: one.id,
+      email: "invitee@example.com",
+      tokenHash: `hash-${game.id}`,
+      expiresAt: new Date(Date.now() + 60_000),
+    },
+  });
+
+  const list = await reply(
+    await run(games.loader, get("/games", { cookie: one.cookie })),
+  );
+  expect(list.body).toMatchObject({
+    games: [{ id: game.id, opponent: null, invited: "invitee@example.com" }],
+  });
+  const page = await reply(
+    await run(board.loader, get(`/games/${game.id}`, { cookie: one.cookie }), {
+      id: game.id,
+    }),
+  );
+  expect(page.body).toMatchObject({ invitedEmail: "invitee@example.com" });
+
+  // Once the invitee has joined, the address is no longer shown as invited.
+  const two = await player("invitee");
+  await db.game.update({
+    where: { id: game.id },
+    data: { status: "ACTIVE", playerTwoId: two.id },
+  });
+  const after = await reply(
+    await run(board.loader, get(`/games/${game.id}`, { cookie: one.cookie }), {
+      id: game.id,
+    }),
+  );
+  expect(after.body).toMatchObject({ invitedEmail: null });
+});
+
 test("a move with a missing or non-integer column is refused with 400", async () => {
   const { one, game } = await activeGame();
   const path = `/games/${game.id}/moves`;
@@ -583,6 +645,38 @@ test("a move whose read lost the race is refused as stale by the update", async 
 
   expect(result).toEqual({ ok: false, status: 409, error: "stale" });
   expect(await db.move.count({ where: { gameId: game.id } })).toBe(1);
+});
+
+test("an inviter's first move whose read predates the invitee joining is refused as stale", async () => {
+  // As above, the read returns the snapshot a concurrent transaction would
+  // see: still INVITED with an empty seat, though the invitee has joined.
+  const one = await player("inviter");
+  const two = await player("invitee");
+  const game = await db.game.create({
+    data: { playerOneId: one.id, status: "INVITED", nextPlayerId: one.id },
+  });
+  const before = await db.game.findUniqueOrThrow({
+    where: { id: game.id },
+    include: { moves: true },
+  });
+  await db.game.update({
+    where: { id: game.id },
+    data: { status: "ACTIVE", playerTwoId: two.id },
+  });
+
+  const result = await makeMove(staleGameReads(before), {
+    gameId: game.id,
+    userId: one.id,
+    column: 3,
+    expectedMoveCount: 0,
+  });
+
+  expect(result).toEqual({ ok: false, status: 409, error: "stale" });
+  expect(await db.game.findUnique({ where: { id: game.id } })).toMatchObject({
+    status: "ACTIVE",
+    nextPlayerId: one.id,
+    moveCount: 0,
+  });
 });
 
 test("two rematch posts on a double submit start one new game", async () => {
@@ -859,6 +953,51 @@ test("state?since= ahead of the game, or not a whole number, is refused with 400
       since,
       status: 400,
     });
+  }
+});
+
+test("state?since=n&status= returns the new state when an INVITED game turns ACTIVE at the same move count", async () => {
+  const one = await player("inviter");
+  const two = await player("invitee");
+  const game = await db.game.create({
+    data: { playerOneId: one.id, status: "INVITED", nextPlayerId: one.id },
+  });
+  await move(one, game.id, 3);
+  expect(await readState(one, game.id, 1, "INVITED")).toEqual({
+    status: 200,
+    body: { unchanged: true, moveCount: 1 },
+  });
+
+  // The invitee accepts: no move, so the move count stays at 1.
+  await db.game.update({
+    where: { id: game.id },
+    data: { playerTwoId: two.id, status: "ACTIVE", nextPlayerId: two.id },
+  });
+
+  expect(await readState(one, game.id, 1, "INVITED")).toEqual({
+    status: 200,
+    body: {
+      unchanged: false,
+      moveCount: 1,
+      status: "ACTIVE",
+      yourTurn: false,
+      result: null,
+      winningCells: [],
+      lastMove: { row: 0, column: 3, player: 1 },
+      moves: [],
+    },
+  });
+  // A client that already has ACTIVE is told nothing changed.
+  expect(await readState(one, game.id, 1, "ACTIVE")).toEqual({
+    status: 200,
+    body: { unchanged: true, moveCount: 1 },
+  });
+});
+
+test("state?status= that isn't a game status is refused with 400", async () => {
+  const { one, game } = await activeGame();
+  for (const status of ["", "active", "PLAYING"]) {
+    expect((await readState(one, game.id, 0, status)).status).toBe(400);
   }
 });
 
