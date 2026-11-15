@@ -1,3 +1,4 @@
+import { InMemoryChallengeStore } from "@activescott/auth";
 import { NodemailerTransport } from "@activescott/auth-provider-email";
 import type { SendMailOptions } from "nodemailer";
 import { afterAll, expect, test, vi } from "vitest";
@@ -111,10 +112,10 @@ async function followMagicLink(jar: CookieJar, magicLink: string) {
   return response;
 }
 
-// An existing account, so the gate allows it; each test uses its own address
-// to stay under the library's per-recipient rate limit.
+// An existing, approved account, so the gate allows it; each test uses its
+// own address to stay under the library's per-recipient rate limit.
 async function member(email: string) {
-  await db.user.create({ data: { email } });
+  await db.user.create({ data: { email, approvedAt: new Date() } });
   return email;
 }
 
@@ -342,20 +343,20 @@ test("a wrong code is refused and logs auth.signin.failed", async () => {
 // too (#43), so the gate must refuse the account at verify. Here the address
 // was invited when the code went out and the invite has lapsed since, which
 // gives the test a correct code for an address the gate no longer allows.
-test("a correct code for an address the gate does not allow is refused and leaves no account", async () => {
-  const email = "lapsed-invitee@example.com";
-  const inviter = await db.user.create({
-    data: { email: "lapsed-inviter@example.com" },
+// A correct code in `jar` for `email`, which the gate no longer allows.
+async function lapsedInviteCode(email: string) {
+  const { id: inviterId } = await db.user.create({
+    data: { email: `inviter-of-${email}`, approvedAt: new Date() },
   });
   const game = await db.game.create({
-    data: { playerOneId: inviter.id, status: "INVITED" },
+    data: { playerOneId: inviterId, status: "INVITED" },
   });
   const invite = await db.invite.create({
     data: {
       gameId: game.id,
-      inviterId: inviter.id,
+      inviterId,
       email,
-      tokenHash: "hash-lapsed",
+      tokenHash: `hash-${email}`,
       expiresAt: new Date(Date.now() + 60_000),
     },
   });
@@ -366,22 +367,95 @@ test("a correct code for an address the gate does not allow is refused and leave
     where: { id: invite.id },
     data: { expiresAt: new Date(Date.now() - 1) },
   });
+  return { jar, code: code as string };
+}
 
-  const response = await auth(
+function verifyCode(jar: CookieJar, code: string) {
+  return auth(
     formPost(
       "/auth/email/verify",
       { code },
       { cookie: jar.header(), referer: "/login" },
     ),
   );
+}
+
+const sessionCookie = (response: Response) =>
+  /(^|, )session=[^;]/.test(response.headers.getSetCookie().join(", "));
+
+test("a correct code for an address the gate does not allow is refused and leaves no account", async () => {
+  const email = "lapsed-invitee@example.com";
+  const { jar, code } = await lapsedInviteCode(email);
+
+  const response = await verifyCode(jar, code);
 
   expect(response.status).toBe(302);
   expect(response.headers.get("location")).toMatch(
     /^\/login\?error=INVALID_CREDENTIALS/,
   );
-  expect(response.headers.getSetCookie().join()).not.toMatch(
-    /(^|, )session=[^;]/,
+  expect(sessionCookie(response)).toBe(false);
+  expect(await db.user.count({ where: { email } })).toBe(0);
+  expect(await db.identity.count({ where: { identifier: email } })).toBe(0);
+});
+
+// Two verifies of one correct code, forced into the order that let the
+// second one in: both pass the code check before either consumes the
+// challenge, A inserts the users row and is held before its identity
+// insert, and B finds A's row, inserts its identity and returns while A is
+// still held. Under a connection pool this needs no help, just bad luck.
+test("the same correct code verified twice at once is refused both times and leaves no account", async () => {
+  const email = "raced-invitee@example.com";
+  const { jar, code } = await lapsedInviteCode(email);
+  const signal = () => {
+    let resolve!: () => void;
+    const promise = new Promise<void>((r) => (resolve = r));
+    return { promise, resolve };
+  };
+  const bAtConsume = signal();
+  const aAtIdentity = signal();
+  const bReturned = signal();
+
+  const consume = InMemoryChallengeStore.prototype.delete;
+  const consumeSpy = vi
+    .spyOn(InMemoryChallengeStore.prototype, "delete")
+    .mockImplementationOnce(async function (this: InMemoryChallengeStore, id) {
+      await bAtConsume.promise;
+      return consume.call(this, id);
+    })
+    .mockImplementationOnce(async function (this: InMemoryChallengeStore, id) {
+      bAtConsume.resolve();
+      await aAtIdentity.promise;
+      return consume.call(this, id);
+    });
+  const create = db.identity.create.bind(db.identity);
+  const createSpy = vi.spyOn(db.identity, "create").mockImplementationOnce(((
+    args: Parameters<typeof create>[0],
+  ) => {
+    aAtIdentity.resolve();
+    return bReturned.promise.then(() => create(args));
+  }) as unknown as typeof create);
+
+  const posts = [verifyCode(jar, code), verifyCode(jar, code)].map((post) =>
+    post.catch((error: unknown) => error),
   );
+  // A is held until B returns, so the first to settle is B.
+  const b = await Promise.race(posts);
+  bReturned.resolve();
+  const results = await Promise.all(posts);
+  expect(createSpy).toHaveBeenCalledTimes(2);
+  consumeSpy.mockRestore();
+  createSpy.mockRestore();
+
+  expect(b).toBeInstanceOf(Response);
+  expect((b as Response).headers.get("location")).toMatch(
+    /^\/login\?error=INVALID_CREDENTIALS/,
+  );
+  for (const result of results) {
+    if (result instanceof Response) {
+      expect(result.headers.get("location")).not.toBe("/profile");
+      expect(sessionCookie(result)).toBe(false);
+    }
+  }
   expect(await db.user.count({ where: { email } })).toBe(0);
   expect(await db.identity.count({ where: { identifier: email } })).toBe(0);
 });

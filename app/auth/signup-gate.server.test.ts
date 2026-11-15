@@ -77,7 +77,9 @@ test("the gate lets every initiate through, a stranger's too", async () => {
 });
 
 test("sends to an address that already has an account", async () => {
-  await db.user.create({ data: { email: "member@example.com" } });
+  await db.user.create({
+    data: { email: "member@example.com", approvedAt: new Date() },
+  });
 
   expect(await signInMail(gate(), "member@example.com")).toEqual({
     answer: true,
@@ -180,7 +182,9 @@ test("sends nothing to any other address and logs auth.signin.failed without the
 });
 
 test("never waits for the relay, so a send takes no longer than a refusal", async () => {
-  await db.user.create({ data: { email: "slow-relay@example.com" } });
+  await db.user.create({
+    data: { email: "slow-relay@example.com", approvedAt: new Date() },
+  });
   const signup = gate();
   signup.inner.sendMagicLink.mockReturnValue(new Promise(() => {}));
   const timeout = new Promise((resolve) =>
@@ -197,7 +201,9 @@ test("never waits for the relay, so a send takes no longer than a refusal", asyn
 });
 
 test("a send that fails in the background is logged as email.signin.failed", async () => {
-  await db.user.create({ data: { email: "relay-down@example.com" } });
+  await db.user.create({
+    data: { email: "relay-down@example.com", approvedAt: new Date() },
+  });
   const signup = gate();
   signup.inner.sendMagicLink.mockResolvedValue(false);
 
@@ -288,12 +294,12 @@ test("onVerified does not log a sign-in for a link to the signed-in account", as
 });
 
 // What the verify hands onVerified for an address with no identity yet: the
-// user store's row (createdNow when the verify inserted it) and the identity
-// the library then created for it.
-async function verifiedNewUser(email: string, { createdNow = true } = {}) {
+// user store's row (approved only if the test says so) and the identity the
+// library then created for it.
+async function verifiedNewUser(email: string, { approved = false } = {}) {
   const row = await db.user.upsert({
     where: { email },
-    create: { email },
+    create: { email, approvedAt: approved ? new Date() : null },
     update: {},
   });
   const identity = await db.identity.create({
@@ -301,10 +307,7 @@ async function verifiedNewUser(email: string, { createdNow = true } = {}) {
   });
   return {
     ...attempt(email),
-    user: {
-      id: row.id,
-      metadata: { email, ...(createdNow && { createdNow }) },
-    },
+    user: { id: row.id, metadata: { email } },
     identity: {
       id: identity.id,
       userId: row.id,
@@ -316,7 +319,6 @@ async function verifiedNewUser(email: string, { createdNow = true } = {}) {
     isNewUser: true,
   };
 }
-
 test("onVerified refuses a new account for an address with no invite and deletes what the verify created", async () => {
   const { gate: open, capture } = gate("seed@example.com");
   const input = await verifiedNewUser("guessed@example.com");
@@ -368,13 +370,61 @@ test("onVerified allows a new account for an address in SIGNUP_EMAILS", async ()
   expect(await db.user.count({ where: { id: input.user.id } })).toBe(1);
 });
 
-// An account whose email identity is missing gets isNewUser too, but the
-// verify did not create its row, so it is neither refused nor deleted.
-test("onVerified allows an account the verify did not create", async () => {
+test("onVerified approves the account it allows", async () => {
+  const input = await verifiedNewUser("approved-seed@example.com");
+
+  await gate("approved-seed@example.com").gate.onVerified!(input);
+
+  const row = await db.user.findUniqueOrThrow({ where: { id: input.user.id } });
+  expect(row.approvedAt).toBeInstanceOf(Date);
+});
+
+// An account whose email identity is missing gets isNewUser too. It was
+// approved when it first signed in, so it is neither refused nor deleted.
+test("onVerified allows an approved account the verify did not create", async () => {
   const input = await verifiedNewUser("identity-less@example.com", {
-    createdNow: false,
+    approved: true,
   });
 
   expect(await gate().gate.onVerified!(input)).toBe("allow");
   expect(await db.user.count({ where: { id: input.user.id } })).toBe(1);
+});
+
+// Whatever isNewUser says: a verify that finds the row another verify of the
+// same code inserted, or a row a failed delete left, is still unapproved.
+test("onVerified refuses and deletes an unapproved account that is not new", async () => {
+  const input = await verifiedNewUser("not-new@example.com");
+
+  const decision = await gate().gate.onVerified!({
+    ...input,
+    isNewUser: false,
+  });
+
+  expect(decision).toEqual({
+    error: expect.objectContaining({ code: "INVALID_CREDENTIALS" }),
+  });
+  expect(await db.user.count({ where: { id: input.user.id } })).toBe(0);
+});
+
+test("a row left by a failed delete gets no mail and is refused on the next verify", async () => {
+  const signup = gate();
+  const input = await verifiedNewUser("failed-delete@example.com");
+  const deleteMany = vi
+    .spyOn(db.user, "deleteMany")
+    .mockRejectedValueOnce(new Error("connection lost"));
+
+  await expect(signup.gate.onVerified!(input)).rejects.toThrow();
+  deleteMany.mockRestore();
+  expect(await db.user.count({ where: { id: input.user.id } })).toBe(1);
+
+  expect(await signInMail(signup, "failed-delete@example.com")).toEqual({
+    answer: true,
+    sent: false,
+  });
+  expect(
+    await signup.gate.onVerified!({ ...input, isNewUser: false }),
+  ).toEqual({
+    error: expect.objectContaining({ code: "INVALID_CREDENTIALS" }),
+  });
+  expect(await db.user.count({ where: { id: input.user.id } })).toBe(0);
 });
