@@ -164,6 +164,24 @@ test(`a player can have at most ${5} pending invites; the next is refused and lo
   expect((await invite(await user("carol"), address("dave"))).ok).toBe(true);
 });
 
+test("a second pending invite to the same address is refused and nothing is sent", async () => {
+  const alice = await user("alice");
+  const bob = address("Bob");
+  const first = await invite(alice, bob);
+  expect(first.ok).toBe(true);
+
+  expect(await invite(alice, bob.toUpperCase())).toEqual({
+    ok: false,
+    error: "already_invited",
+    gameId: first.ok && first.gameId,
+  });
+  expect(mailer.count(bob, "invite")).toBe(1);
+  expect(await db.invite.count({ where: { inviterId: alice.id } })).toBe(1);
+
+  // Someone else may still invite that address.
+  expect((await invite(await user("carol"), bob)).ok).toBe(true);
+});
+
 test("accepted and expired invites don't count toward the cap", async () => {
   const alice = await user("alice");
   const accepted = await user("accepted");

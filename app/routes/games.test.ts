@@ -605,6 +605,38 @@ test("a move whose read lost the race is refused as stale by the update", async 
   expect(await db.move.count({ where: { gameId: game.id } })).toBe(1);
 });
 
+test("an inviter's first move whose read predates the invitee joining is refused as stale", async () => {
+  // As above, the read returns the snapshot a concurrent transaction would
+  // see: still INVITED with an empty seat, though the invitee has joined.
+  const one = await player("inviter");
+  const two = await player("invitee");
+  const game = await db.game.create({
+    data: { playerOneId: one.id, status: "INVITED", nextPlayerId: one.id },
+  });
+  const before = await db.game.findUniqueOrThrow({
+    where: { id: game.id },
+    include: { moves: true },
+  });
+  await db.game.update({
+    where: { id: game.id },
+    data: { status: "ACTIVE", playerTwoId: two.id },
+  });
+
+  const result = await makeMove(staleGameReads(before), {
+    gameId: game.id,
+    userId: one.id,
+    column: 3,
+    expectedMoveCount: 0,
+  });
+
+  expect(result).toEqual({ ok: false, status: 409, error: "stale" });
+  expect(await db.game.findUnique({ where: { id: game.id } })).toMatchObject({
+    status: "ACTIVE",
+    nextPlayerId: one.id,
+    moveCount: 0,
+  });
+});
+
 test("two rematch posts on a double submit start one new game", async () => {
   const { one, two, game } = await activeGame();
   await playToWin(one, two, game.id);

@@ -318,6 +318,17 @@ test("the New game form explains a bad address, your own address and the cap", a
   expect(log.capture.events("invite.capped")).toHaveLength(1);
 });
 
+test("inviting the same address again says it's already invited", async () => {
+  const alice = await player("alice");
+  const bob = address("bob");
+  await sendInvite(alice, bob);
+
+  expect(await reply(await sendInvite(alice, bob))).toMatchObject({
+    status: 409,
+    body: { error: `You already invited ${bob}. That game is in your list.` },
+  });
+});
+
 test("an expired invite link says so, and its sign-in sends nothing", async () => {
   const alice = await player("alice");
   const bob = address("bob");
