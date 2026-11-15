@@ -401,3 +401,22 @@ test("/invite/:gameId signed out goes to sign-in and back; an unknown token is 4
   );
   expect((await reply(await openInvite("no-such-token"))).status).toBe(404);
 });
+
+test("/e2e/captured-email also returns the last invite and turn email for an address", async () => {
+  const alice = await player("alice");
+  const bob = address("bob");
+  await sendInvite(alice, bob);
+
+  const response = (await run(
+    capturedEmail.loader,
+    get(`/e2e/captured-email?email=${encodeURIComponent(bob)}`, E2E_SECRET),
+  )) as Response;
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    invite: {
+      subject: expect.stringContaining("invited you"),
+      link: `http://localhost/invite/${inviteToken(bob)}`,
+    },
+  });
+});
