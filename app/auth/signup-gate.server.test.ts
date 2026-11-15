@@ -305,7 +305,14 @@ async function verifiedNewUser(email: string, { createdNow = true } = {}) {
       id: row.id,
       metadata: { email, ...(createdNow && { createdNow }) },
     },
-    identity: { ...identity, providerState: {} },
+    identity: {
+      id: identity.id,
+      userId: row.id,
+      provider: "email",
+      identifier: email,
+      providerState: {},
+      createdAt: identity.createdAt,
+    },
     isNewUser: true,
   };
 }

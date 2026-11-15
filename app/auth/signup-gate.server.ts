@@ -1,4 +1,4 @@
-import type { InitiateGate } from "@activescott/auth";
+import { AuthErrors, type InitiateGate } from "@activescott/auth";
 import type { EmailTransport } from "@activescott/auth-provider-email";
 import type { PrismaClient } from "../generated/prisma/client";
 import type { Logger } from "../logger.server";
@@ -17,6 +17,11 @@ export function parseSignupEmails(value: string | undefined): Set<string> {
 // is sent nothing, but gets the same answer (#43): the gate lets every
 // initiate through, and `transport` drops the email instead. A refusal would
 // tell a stranger which addresses have an account or an invite.
+//
+// The library still stores a live code for the dropped email, so a caller
+// who guesses it reaches verify. `onVerified` refuses an account the verify
+// has just created for an address with no invite or SIGNUP_EMAILS place, and
+// deletes the user row (and, by cascade, its identity).
 export function createSignupGate({
   db,
   signupEmails,
@@ -28,19 +33,23 @@ export function createSignupGate({
 }): { gate: InitiateGate; transport(inner: EmailTransport): EmailTransport } {
   const seeded = parseSignupEmails(signupEmails);
 
+  function pendingInvite(email: string) {
+    return db.invite.findFirst({
+      where: {
+        email: { equals: email, mode: "insensitive" },
+        acceptedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true },
+    });
+  }
+
   // Both lookups run for every address, so the time taken doesn't say which
   // one matched.
   async function allowed(email: string) {
     const [user, invite] = await Promise.all([
       db.user.findUnique({ where: { email }, select: { id: true } }),
-      db.invite.findFirst({
-        where: {
-          email: { equals: email, mode: "insensitive" },
-          acceptedAt: null,
-          expiresAt: { gt: new Date() },
-        },
-        select: { id: true },
-      }),
+      pendingInvite(email),
     ]);
     return seeded.has(email) || user !== null || invite !== null;
   }
@@ -71,7 +80,24 @@ export function createSignupGate({
     onInitiate: () => "allow",
     // Runs after an email link or code verifies and before the session is
     // created. Passkey sign-ins never reach it (see the PR's library gaps).
-    onVerified({ provider, mode, user, isNewUser }) {
+    async onVerified({ provider, identifier, mode, user, isNewUser }) {
+      // Not the users table: this verify has just inserted the row.
+      if (
+        mode === "signin" &&
+        isNewUser &&
+        user.metadata?.createdNow === true &&
+        !seeded.has(identifier) &&
+        !(await pendingInvite(identifier))
+      ) {
+        await db.user.deleteMany({ where: { id: user.id } });
+        logger.info({
+          event: "auth.signin.failed",
+          provider,
+          reason: "not_invited",
+        });
+        // Answered like a wrong code.
+        return { error: AuthErrors.invalidCredentials() };
+      }
       if (mode === "signin") {
         logger.info({
           event: "auth.signin.succeeded",
