@@ -11,7 +11,7 @@ const mail: Mail = {
   link: "https://app.example/invite/t",
 };
 
-test("the SMTP mailer sends from FROM_EMAIL with the subject, text and HTML", async () => {
+test("the SMTP mailer sends as Four in a Row from FROM_EMAIL with the subject, text and HTML", async () => {
   const transport = nodemailer.createTransport({ jsonTransport: true });
   const sent: unknown[] = [];
   const original = transport.sendMail.bind(transport);
@@ -24,13 +24,26 @@ test("the SMTP mailer sends from FROM_EMAIL with the subject, text and HTML", as
   expect(await mailer.send(mail)).toBe(true);
   expect(sent).toEqual([
     {
-      from: "noreply@example.com",
+      from: { name: "Four in a Row", address: "noreply@example.com" },
       to: "b@example.com",
       subject: mail.subject,
       text: mail.text,
       html: mail.html,
     },
   ]);
+});
+
+test("the SMTP mailer sets Reply-To when the mail has one", async () => {
+  const transport = nodemailer.createTransport({ jsonTransport: true });
+  const sent: SendMailOptions[] = [];
+  transport.sendMail = (async (options: SendMailOptions) => {
+    sent.push(options);
+  }) as typeof transport.sendMail;
+  const mailer = createSmtpMailer({ transport, from: "noreply@example.com" });
+
+  await mailer.send({ ...mail, replyTo: "alice@example.com" });
+
+  expect(sent[0]?.replyTo).toBe("alice@example.com");
 });
 
 test("the SMTP mailer answers false instead of throwing when the send fails", async () => {

@@ -1,3 +1,5 @@
+import { NodemailerTransport } from "@activescott/auth-provider-email";
+import type { SendMailOptions } from "nodemailer";
 import { afterAll, expect, test, vi } from "vitest";
 import type { PrismaClient } from "../generated/prisma/client";
 import { createPgliteDb } from "../pglite.server";
@@ -210,6 +212,31 @@ test.each(OFF_SITE)(
     expect(again.headers.get("location")).toBe("/profile");
   },
 );
+
+test("the sign-in email comes from Four in a Row, with its name in the subject once", async () => {
+  const { emailConfig } = await import("../auth.server");
+  const transport = new NodemailerTransport();
+  const sent: SendMailOptions[] = [];
+  Object.assign(transport, {
+    transporter: {
+      sendMail: async (options: SendMailOptions) => sent.push(options),
+    },
+  });
+
+  await transport.sendMagicLink(
+    "b@example.com",
+    "http://localhost/l",
+    emailConfig,
+    {
+      code: "123456",
+    },
+  );
+
+  expect(sent[0]).toMatchObject({
+    from: '"Four in a Row" <noreply@example.com>',
+    subject: "Sign in to Four in a Row",
+  });
+});
 
 // #43: the answer must not say whether an address has an account or an
 // invite, so a refused address gets what an allowed one gets, cookie and all.
