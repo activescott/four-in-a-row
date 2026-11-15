@@ -20,8 +20,9 @@ function render(path: string, Component: unknown, loaderData: unknown) {
 }
 
 function state(overrides: Partial<GameState> = {}): GameState {
-  const board = emptyBoard();
-  board[0]![3] = 2;
+  const board = emptyBoard().map((row, r) =>
+    row.map((cell, c) => (r === 0 && c === 3 ? (2 as const) : cell)),
+  );
   return {
     id: "g1",
     status: "ACTIVE",

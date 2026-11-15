@@ -6,6 +6,7 @@ import {
   gameState,
   playerEmails,
 } from "../game/games.server";
+import { displayName } from "../game/display";
 import { COLUMNS, ROWS, type Player } from "../game/rules";
 import type { Route } from "./+types/games.$id";
 import type { action as moveAction } from "./games.$id.moves";
@@ -32,6 +33,9 @@ export function shouldRevalidate() {
 }
 
 const DISC: Record<Player, string> = { 1: "bg-red-600", 2: "bg-amber-400" };
+// Marks drawn on a disc: dark on yellow, white on red, so both stay legible.
+const INK: Record<Player, string> = { 1: "text-white", 2: "text-slate-900" };
+const INK_BG: Record<Player, string> = { 1: "bg-white", 2: "bg-slate-900" };
 const COLOUR: Record<Player, string> = { 1: "red", 2: "yellow" };
 
 const ERRORS: Record<string, string> = {
@@ -42,55 +46,114 @@ const ERRORS: Record<string, string> = {
   column_out_of_range: "Pick one of the seven columns.",
 };
 
+function Star({ className }: { className: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={`size-5 fill-current ${className}`}
+    >
+      <path d="M12 2l3.1 6.6 7.2.9-5.3 5 1.4 7.1L12 18l-6.4 3.6L7 14.5l-5.3-5 7.2-.9z" />
+    </svg>
+  );
+}
+
 export default function Board({ loaderData }: Route.ComponentProps) {
   const { game, emails } = loaderData;
   const fetcher = useFetcher<typeof moveAction>();
   const opponent: Player = game.you === 1 ? 2 : 1;
+  const opponentName = displayName(emails[opponent]);
   const finished = game.result !== null;
   const canMove = game.yourTurn && fetcher.state === "idle";
   const winning = new Set(game.winningCells.map((c) => `${c.row}:${c.column}`));
+  const last = game.lastMove;
   const error = fetcher.state === "idle" ? fetcher.data?.error : null;
+  const waiting = !finished && !game.yourTurn && !!emails[opponent];
+  const mover: Player | null = finished
+    ? null
+    : game.yourTurn
+      ? game.you
+      : waiting
+        ? opponent
+        : null;
 
-  let status: string;
+  let status: React.ReactNode;
   if (game.result === "won") status = "You won!";
   else if (game.result === "lost") status = "You lost.";
   else if (game.result === "draw") status = "Draw.";
-  else if (game.yourTurn) status = "Your turn.";
-  else if (!emails[opponent]) status = "Waiting for your opponent to join.";
-  else status = "Their turn.";
+  else if (game.yourTurn) {
+    status = (
+      <>
+        <span
+          className={`size-6 shrink-0 rounded-full ${DISC[game.you]}`}
+          aria-hidden="true"
+        />
+        Your turn, you are {COLOUR[game.you]}.
+      </>
+    );
+  } else if (!emails[opponent]) status = "Waiting for your opponent to join.";
+  else {
+    status = (
+      <>
+        <span
+          className={`size-6 shrink-0 rounded-full ${DISC[opponent]}`}
+          aria-hidden="true"
+        />
+        Waiting for {opponentName} ({COLOUR[opponent]}).
+      </>
+    );
+  }
+
+  const legend = (seat: Player, label: string) => (
+    <p
+      className={`flex items-center gap-2 ${mover === seat ? "font-semibold" : ""}`}
+    >
+      <span
+        className={`inline-block size-4 shrink-0 rounded-full ${DISC[seat]} ${
+          mover === seat ? "ring-2 ring-slate-900 ring-offset-2" : ""
+        }`}
+      />
+      <span className="min-w-0 truncate">{label}</span>
+    </p>
+  );
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col gap-4 p-4">
-      <header className="flex items-baseline justify-between">
-        <Link to="/games" className="text-slate-700 underline">
+    <main className="mx-auto flex min-h-screen max-w-lg flex-col gap-4 p-4">
+      <nav>
+        <Link
+          to="/games"
+          className="-mx-3 inline-flex min-h-11 items-center px-3 text-sm text-slate-700 underline"
+        >
           Your games
         </Link>
-        <h1 className="text-lg font-bold text-slate-900">Four in a Row</h1>
-      </header>
+      </nav>
+      <h1 className="-mt-2 text-2xl font-bold text-slate-900">Four in a Row</h1>
 
       <div className="flex flex-col gap-1 text-slate-800">
-        <p className="flex items-center gap-2">
-          <span
-            className={`inline-block size-4 rounded-full ${DISC[game.you]}`}
-          />
-          You are {COLOUR[game.you]}
-        </p>
-        <p className="flex items-center gap-2 truncate">
-          <span
-            className={`inline-block size-4 shrink-0 rounded-full ${DISC[opponent]}`}
-          />
-          {emails[opponent] ?? "Invited player"}
-        </p>
+        {legend(game.you, `You are ${COLOUR[game.you]}`)}
+        {legend(opponent, emails[opponent] ?? "Invited player")}
       </div>
 
-      <p role="status" className="text-xl font-semibold text-slate-900">
-        {status}
-      </p>
+      <div>
+        <p
+          role="status"
+          className={`flex items-center gap-2 text-xl ${
+            waiting ? "text-slate-700" : "font-semibold text-slate-900"
+          }`}
+        >
+          {status}
+        </p>
+        {last && (
+          <p className="mt-1 text-base text-slate-700">
+            {`${last.player === game.you ? "You" : displayName(emails[last.player])} played column ${last.column + 1}.`}
+          </p>
+        )}
+      </div>
 
       <fetcher.Form
         method="post"
         action={`/games/${game.id}/moves`}
-        className="grid grid-cols-7 gap-1 rounded-lg bg-blue-700 p-1.5"
+        className="grid grid-cols-7 gap-1 rounded-lg bg-blue-950 p-1.5"
       >
         <input type="hidden" name="expectedMoveCount" value={game.moveCount} />
         {Array.from({ length: COLUMNS }, (_, column) => {
@@ -103,20 +166,36 @@ export default function Board({ loaderData }: Route.ComponentProps) {
               value={column}
               disabled={!canMove || full}
               aria-label={`Drop a disc in column ${column + 1}`}
-              className="flex flex-col-reverse gap-1 rounded enabled:active:bg-blue-600"
+              className="flex flex-col-reverse gap-1 rounded enabled:active:bg-blue-900"
             >
               {Array.from({ length: ROWS }, (_, row) => {
                 const cell = game.board[row]![column];
-                const ring = winning.has(`${row}:${column}`)
-                  ? " ring-4 ring-white"
-                  : "";
+                const isWin = winning.has(`${row}:${column}`);
+                const isLast = last?.row === row && last.column === column;
+                const fade =
+                  cell && game.winningCells.length > 0 && !isWin
+                    ? " opacity-50"
+                    : "";
+                const ring =
+                  isWin && cell
+                    ? ` ring-4 ring-inset ${cell === 1 ? "ring-white" : "ring-slate-900"}`
+                    : "";
                 return (
                   <span
                     key={row}
-                    className={`block aspect-square w-full rounded-full ${
+                    className={`flex aspect-square w-full items-center justify-center rounded-full ${
                       cell ? DISC[cell] : "bg-white"
-                    }${ring}`}
-                  />
+                    }${ring}${fade}`}
+                  >
+                    {cell && isWin && <Star className={INK[cell]} />}
+                    {cell && isLast && !isWin && (
+                      <span
+                        role="img"
+                        aria-label="Last move"
+                        className={`size-3 rounded-full ${INK_BG[cell]}`}
+                      />
+                    )}
+                  </span>
                 );
               })}
             </button>
@@ -135,7 +214,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           <input type="hidden" name="rematchOf" value={game.id} />
           <button
             type="submit"
-            className="w-full rounded bg-slate-900 px-4 py-3 font-medium text-white"
+            className="min-h-12 w-full rounded-lg bg-blue-700 px-4 py-3 text-lg font-semibold text-white hover:bg-blue-800"
           >
             Rematch
           </button>
