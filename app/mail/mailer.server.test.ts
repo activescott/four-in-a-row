@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import nodemailer, { type SendMailOptions } from "nodemailer";
 import { expect, test } from "vitest";
 import { CaptureMailer, createSmtpMailer, type Mail } from "./mailer.server";
 
@@ -15,7 +15,7 @@ test("the SMTP mailer sends from FROM_EMAIL with the subject, text and HTML", as
   const transport = nodemailer.createTransport({ jsonTransport: true });
   const sent: unknown[] = [];
   const original = transport.sendMail.bind(transport);
-  transport.sendMail = (async (options: nodemailer.SendMailOptions) => {
+  transport.sendMail = (async (options: SendMailOptions) => {
     sent.push(options);
     return original(options);
   }) as typeof transport.sendMail;

@@ -20,6 +20,7 @@ import { createSignupGate, NOT_INVITED } from "./auth/signup-gate.server";
 import { createUserStore } from "./auth/user-store.server";
 import { getDb } from "./db.server";
 import { logger } from "./logger.server";
+import { fromEmail, smtp } from "./mail/mailer.server";
 
 const env = process.env;
 const production = env.NODE_ENV === "production";
@@ -52,14 +53,8 @@ export const captureEmailTransport = e2eTestMode
   : null;
 
 const emailConfig = validateEmailConfig({
-  smtp: {
-    host: env.SMTP_HOST ?? (production ? "" : "localhost"),
-    port: Number(env.SMTP_PORT ?? 587),
-    secure: env.SMTP_SECURE === "true",
-    user: env.SMTP_USER ?? (production ? "" : "dev"),
-    pass: env.SMTP_PASS ?? (production ? "" : "dev"),
-  },
-  from: env.FROM_EMAIL ?? (production ? "" : "noreply@localhost.test"),
+  smtp,
+  from: fromEmail,
   template: {
     appName: "Four in a Row",
     subject: "Sign in to Four in a Row",
