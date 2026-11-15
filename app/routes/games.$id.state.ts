@@ -1,6 +1,11 @@
 import { requireAuth } from "../auth.server";
 import { getDb } from "../db.server";
-import { findGameForPlayer, gameState, stateSince } from "../game/games.server";
+import {
+  findGameForPlayer,
+  gameState,
+  recordSeen,
+  stateSince,
+} from "../game/games.server";
 import type { Route } from "./+types/games.$id.state";
 
 // GET /games/:id/state?since=n: the board page's poll. Answers "unchanged",
@@ -11,8 +16,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   if (since !== null && !/^\d+$/.test(since)) {
     throw new Response("Bad request", { status: 400 });
   }
-  const game = await findGameForPlayer(await getDb(), params.id, user.id);
+  const db = await getDb();
+  const game = await findGameForPlayer(db, params.id, user.id);
   if (!game) throw new Response("Not found", { status: 404 });
+  await recordSeen(db, game, user.id);
   const body =
     since === null
       ? gameState(game, user.id)
