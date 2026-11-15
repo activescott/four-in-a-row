@@ -85,34 +85,118 @@ test("names are escaped in the HTML part", () => {
   expect(mail.html).not.toContain("<b>");
 });
 
-test("the sign-in email is about Four in a Row, states the expiry calmly and uses the app blue", () => {
-  const mail = signInEmail({
+const LINK = "https://app.example/auth/email/verify?challenge=c&key=k";
+const LINK_HTML = "https://app.example/auth/email/verify?challenge=c&amp;key=k";
+
+function signIn(extra: Partial<Parameters<typeof signInEmail>[0]> = {}) {
+  return signInEmail({
     to: "b@example.com",
-    link: "https://app.example/auth/email/verify?challenge=c&key=k",
+    link: LINK,
     code: "123456",
     minutes: 5,
+    ...extra,
   });
+}
+
+test("the sign-in text part leads with the link, then the code, then the expiry", () => {
+  const mail = signIn();
 
   expect(mail.kind).toBe("signin");
   expect(mail.subject).toBe("Your sign-in link for Four in a Row");
-  expect(mail.text).toContain("Four in a Row");
-  expect(mail.text).toContain("Your sign-in code is: 123456");
-  expect(mail.text).toContain(
-    "This link works for 5 minutes. If it runs out, just ask for a new one.",
-  );
-  expect(mail.text).toContain(
-    "If you weren't expecting this, you can ignore it.",
+  expect(mail.text).toBe(
+    [
+      `Use this link to sign in and play Four in a Row:\n${LINK}`,
+      "Or type this code on the sign-in page:\n\nYour sign-in code is: 123456",
+      "This link works for 5 minutes. If it runs out, go back to the sign-in page and ask for a new one.",
+      "If you weren't expecting this, you can ignore it.",
+    ].join("\n\n"),
   );
   expect(mail.text).not.toMatch(/expire/i);
-  expect(mail.html).toContain("#1d4ed8");
-  expect(mail.html).not.toContain("#6366f1");
-  expect(mail.html).toContain("Four in a Row");
-  expect(mail.html).toContain("This link works for 5 minutes.");
-  expect(mail.html).toContain("expecting this, you can ignore it");
-  expect(mail.html).toContain("123456");
+});
+
+test("the sign-in HTML has a heading, the button before the code, and a calm expiry paragraph", () => {
+  const { html } = signIn();
+
+  expect(html).toMatch(
+    /<h1[^>]*font-size: 22px[^>]*font-weight: (bold|700)[^>]*>Sign in to Four in a Row<\/h1>/,
+  );
+  expect(html).toContain("Use the button below to sign in and play");
+  expect(html).not.toContain("Tap");
+  expect(html).toContain("#1d4ed8");
+  expect(html).not.toContain("#6366f1");
+  expect(html).toMatch(/color: #111827/);
+
+  expect(html.indexOf("Sign in and play</a>")).toBeGreaterThan(-1);
+  expect(html.indexOf("Sign in and play</a>")).toBeLessThan(
+    html.indexOf("Or type this code on the sign-in page:"),
+  );
+  expect(html).toContain("Your sign-in code is: ");
+  expect(html).toMatch(
+    /font-size: 24px;[^"]*font-weight: (bold|700);[^"]*letter-spacing: [^;"]+[^>]*>123456</,
+  );
+
+  expect(html).toMatch(
+    /<p style="[^"]*color: #4b5563;[^"]*font-size: 15px[^"]*">This link works for 5 minutes\. If it runs out, go back to the sign-in page and ask for a new one\.<\/p>/,
+  );
+  expect(html).toMatch(
+    /font-size: 13px[^>]*>If you weren't expecting this, you can ignore it\./,
+  );
+  expect(html).not.toContain("12px");
+  expect(html).toMatch(
+    /<a href="[^"]*" style="[^"]*word-break: break-all[^"]*color: #1d4ed8|<a href="[^"]*" style="[^"]*color: #1d4ed8[^"]*word-break: break-all/,
+  );
+});
+
+test("the link purpose confirms an address instead of asking for a sign-in", () => {
+  const mail = signIn({ purpose: "link" });
+
+  expect(mail.kind).toBe("signin");
+  expect(mail.subject).toBe("Confirm your email for Four in a Row");
+  expect(mail.text).toContain(
+    `Someone signed in to Four in a Row asked to add this email address to their account. Use this link to confirm it:\n${LINK}`,
+  );
+  expect(mail.text).toContain("123456");
+  expect(mail.text).toContain("works for 5 minutes");
+  expect(mail.text).toContain("If that wasn't you, you can ignore this email.");
+  expect(mail.text).not.toMatch(/sign in and play|sign-in/i);
+  expect(mail.html).toContain(">Confirm your email for Four in a Row</h1>");
+  expect(mail.html).toContain("Use the button below to confirm it");
+  expect(mail.html).toContain(">Confirm email</a>");
+  expect(mail.html).not.toMatch(/sign in and play|sign-in/i);
+  expect(mail.html).toContain("If that wasn't you, you can ignore this email.");
+});
+
+test("the sign-in purpose is the default", () => {
+  expect(signIn({ purpose: "sign-in" })).toEqual(signIn());
+});
+
+test("link and code are escaped in the HTML part", () => {
+  const mail = signIn({
+    link: 'https://x/y?a=1&b="2"<z>',
+    code: '1&"<2',
+  });
+
+  expect(mail.html).toContain("https://x/y?a=1&amp;b=&quot;2&quot;&lt;z&gt;");
+  expect(mail.html).toContain("1&amp;&quot;&lt;2");
+  expect(mail.html).not.toContain('b="2"');
+  expect(mail.html).not.toContain("<z>");
+  expect(mail.html).not.toContain('1&"<2');
+  expect(mail.text).toContain('https://x/y?a=1&b="2"<z>');
+});
+
+test("without a code there is no code line in either part", () => {
+  const mail = signIn({ code: undefined });
+
+  expect(mail.text).not.toMatch(/code/i);
+  expect(mail.html).not.toMatch(/code/i);
+  expect(mail.html).not.toContain("letter-spacing");
 });
 
 test("the sign-in email says 1 minute, not 1 minutes", () => {
-  const mail = signInEmail({ to: "b@example.com", link: "l", minutes: 1 });
+  const mail = signIn({ minutes: 1 });
   expect(mail.text).toContain("works for 1 minute.");
+});
+
+test("the link HTML keeps the fallback link readable", () => {
+  expect(signIn().html).toContain(`<a href="${LINK_HTML}"`);
 });
