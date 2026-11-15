@@ -1,4 +1,5 @@
 import nodemailer, { type Transporter } from "nodemailer";
+import { type Logger, logger as appLogger } from "../logger.server";
 
 // The app's own mail (invites and "your turn"), separate from the auth
 // library's sign-in mail but over the same SMTP settings: the email relay in
@@ -25,12 +26,14 @@ export type Mailer = {
 export function createSmtpMailer({
   transport,
   from,
+  logger = appLogger,
 }: {
   transport: Transporter;
   from: string;
+  logger?: Logger;
 }): Mailer {
   return {
-    async send({ to, replyTo, subject, text, html }) {
+    async send({ kind, to, replyTo, subject, text, html }) {
       try {
         await transport.sendMail({
           from: { name: APP_NAME, address: from },
@@ -41,11 +44,31 @@ export function createSmtpMailer({
           html,
         });
         return true;
-      } catch {
+      } catch (error) {
+        // Why the relay refused. Never the link, code, body or address: the
+        // link and code sign someone in.
+        const { code, responseCode, command, message } = (error ??
+          {}) as Record<string, unknown>;
+        logger.error({
+          event: "email.send.failed",
+          kind,
+          code,
+          responseCode,
+          command,
+          // Relays often echo the recipient in their refusal.
+          message: String(message ?? "").replaceAll(
+            new RegExp(escapeRegExp(to), "gi"),
+            "[recipient]",
+          ),
+        });
         return false;
       }
     },
   };
+}
+
+function escapeRegExp(text: string) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /** Records the mail it is given, keyed by address and kind, and sends none. */

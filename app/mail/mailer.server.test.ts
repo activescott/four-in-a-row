@@ -61,11 +61,14 @@ test("the SMTP mailer answers false instead of throwing when the send fails", as
 test("the SMTP mailer logs why the relay refused, without the link, code, body or full address", async () => {
   const transport = nodemailer.createTransport({ jsonTransport: true });
   transport.sendMail = (async () => {
-    throw Object.assign(new Error("550 5.7.1 Relay access denied"), {
-      code: "EENVELOPE",
-      responseCode: 550,
-      command: "RCPT TO",
-    });
+    throw Object.assign(
+      new Error("550 5.7.1 <B@example.com>: Relay access denied"),
+      {
+        code: "EENVELOPE",
+        responseCode: 550,
+        command: "RCPT TO",
+      },
+    );
   }) as typeof transport.sendMail;
   const log = logCapture();
   const mailer = createSmtpMailer({
@@ -89,7 +92,7 @@ test("the SMTP mailer logs why the relay refused, without the link, code, body o
       code: "EENVELOPE",
       responseCode: 550,
       command: "RCPT TO",
-      message: "550 5.7.1 Relay access denied",
+      message: "550 5.7.1 <[recipient]>: Relay access denied",
     }),
   ]);
   const logged = JSON.stringify(log.lines);
