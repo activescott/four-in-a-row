@@ -24,11 +24,11 @@ With `DATABASE_URL` set, the app uses Postgres instead of PGlite. Health checks 
 
 ## Sign-in
 
-Sign-in uses [`@activescott/auth`](https://github.com/activescott/auth): an email link or code at `/login`, and passkeys added from `/profile`. Only an address that already has an account, has a pending invite, or is listed in `SIGNUP_EMAILS` is sent a sign-in email.
+Sign-in uses [`@activescott/auth`](https://github.com/activescott/auth): an email link or code at `/login`, and passkeys added from `/profile`. Only an address that already has an account, has a pending invite, or is listed in `SIGNUP_EMAILS` is sent a sign-in email; every other address gets the same answer, so the form never says which addresses can sign in.
 
 ## Invites
 
-"New game" emails the other player a link to `/invite/:token`. The token is random, works once, expires after 7 days and is tied to the game and the inviter. It is not a sign-in credential: the invite page starts the normal email sign-in for the invited address in the invitee's own browser, which returns to `/invite/:gameId` and seats them. Each player can have at most 5 invites pending, and the response never says whether the address already has an account. After each move, the player whose turn it is gets a "your turn" email unless they have the board open.
+"New game" emails the other player a link to `/invite/:token`. The token is random, works once, expires after 7 days and is tied to the game and the inviter. It is not a sign-in credential: the invite page starts the normal email sign-in for the invited address in the invitee's own browser, showing the address only masked, which returns to `/invite/:gameId` and seats them. Each player can have at most 5 invites pending, one per address, and the response never says whether the address already has an account. After each move, the player whose turn it is gets a "your turn" email unless they have the board open.
 
 | Variable                                                          | Purpose                                                                                    |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
