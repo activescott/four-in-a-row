@@ -891,6 +891,11 @@ test("a poll records when that player last saw the game, at most every 5 s", asy
     await readState(two, game.id, 0);
     expect(await seen()).toEqual({ one: later, two: later });
 
+    // Nor does a refused request.
+    vi.setSystemTime(start.getTime() + 20_000);
+    expect((await readState(one, game.id, 1)).status).toBe(400);
+    expect(await seen()).toEqual({ one: later, two: later });
+
     // Someone who isn't playing leaves no trace.
     vi.setSystemTime(start.getTime() + 20_000);
     await readState(await player("outsider"), game.id, 0);
