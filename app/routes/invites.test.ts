@@ -128,24 +128,35 @@ async function reply(result: unknown) {
   return { status: 200, body: result };
 }
 
-// B signs in from the invite page: the page's form posts to the normal
-// /auth/email/initiate, then B opens the sign-in link from that email.
+// "Send my sign-in email" on the invite page: the page's form posts to the
+// page itself, which starts the normal email sign-in for the invite's
+// address. The page never holds the address.
+async function sendFromInvitePage(
+  token: string,
+  cookie = "",
+  fields: Record<string, string> = {},
+) {
+  return (await run(
+    invite.action,
+    formPost(`/invite/${token}`, fields, {
+      cookie,
+      referer: `/invite/${token}`,
+    }),
+    { key: token },
+  )) as Response;
+}
+
+// b•••@example.com: enough for B to recognise, not enough to learn.
+const masked = (email: string) => `${email[0]}•••@${email.split("@")[1]}`;
+
+// B signs in from the invite page, then opens the sign-in link from that
+// email.
 async function signInFromInvitePage(
   jar: CookieJar,
   email: string,
   token: string,
 ) {
-  const page = (await reply(await openInvite(token, jar.header()))).body as {
-    email: string;
-    redirectTo: string;
-  };
-  const sent = await authRequest(
-    formPost(
-      "/auth/email/initiate",
-      { email: page.email, redirectTo: page.redirectTo },
-      { cookie: jar.header(), referer: `/invite/${token}` },
-    ),
-  );
+  const sent = await sendFromInvitePage(token, jar.header());
   jar.store(sent);
   expect(sent.status).toBe(302);
   expect(sent.headers.get("location")).toContain(`/invite/${token}?sent=1`);
@@ -203,18 +214,20 @@ test("A invites B by email; B signs up from the link, lands in the game, and bot
   );
 
   // Signed out, the invite page offers an email sign-in for B's address
-  // that comes back to /invite/:gameId.
+  // that comes back to /invite/:gameId, showing the address only masked.
   const jar = new CookieJar();
-  expect(await reply(await openInvite(token))).toMatchObject({
+  const page = await reply(await openInvite(token));
+  expect(page).toMatchObject({
     status: 200,
     body: {
       state: "pending",
       inviter: alice.email.split("@")[0],
-      email: bob,
+      maskedEmail: masked(bob),
       redirectTo: `/invite/${gameId}`,
       sent: false,
     },
   });
+  expect(JSON.stringify(page.body)).not.toContain(bob);
 
   const signedIn = await signInFromInvitePage(jar, bob, token);
   expect(signedIn.status).toBe(302);
@@ -341,8 +354,9 @@ test("an expired invite link says so, and its sign-in sends nothing", async () =
 
   expect(await reply(await openInvite(token))).toMatchObject({
     status: 410,
-    body: { state: "expired" },
+    body: { state: "expired", inviter: alice.email.split("@")[0] },
   });
+  expect((await sendFromInvitePage(token)).status).toBe(410);
   expect(log.capture.events("invite.expired")).toContainEqual(
     expect.objectContaining({ gameId }),
   );
@@ -362,6 +376,29 @@ test("an expired invite link says so, and its sign-in sends nothing", async () =
   expect(await readback.json()).not.toHaveProperty("magicLink");
 });
 
+test("the invite page sends its sign-in email only to the invited address", async () => {
+  const alice = await player("alice");
+  const bob = address("bob");
+  await sendInvite(alice, bob);
+  const token = inviteToken(bob);
+  const mallory = address("mallory");
+
+  const sent = await sendFromInvitePage(token, "", { email: mallory });
+
+  expect(sent.status).toBe(302);
+  expect(sent.headers.getSetCookie()).toContainEqual(
+    expect.stringMatching(/^auth_challenge=/),
+  );
+  const readback = async (email: string) =>
+    (await run(
+      capturedEmail.loader,
+      get(`/e2e/captured-email?email=${encodeURIComponent(email)}`, E2E_SECRET),
+    )) as Response;
+  expect(await (await readback(bob)).json()).toHaveProperty("magicLink");
+  expect((await readback(mallory)).status).toBe(404);
+  expect((await sendFromInvitePage("no-such-token")).status).toBe(404);
+});
+
 test("a used invite link can't seat anyone else", async () => {
   const alice = await player("alice");
   const bob = await player("bob");
@@ -370,19 +407,21 @@ test("a used invite link can't seat anyone else", async () => {
   const token = inviteToken(bob.email);
   await openInvite(token, bob.cookie);
 
-  // Signed out, or as B again: B is sent back to the game.
+  // Signed out, it's most likely B again, from a second device: sign in to
+  // get back to the game. Signed in as B: straight back to the game.
   expect(await reply(await openInvite(token))).toMatchObject({
     status: 410,
-    body: { state: "used" },
+    body: { state: "joined", gameId },
   });
   expect(await reply(await openInvite(token, bob.cookie))).toMatchObject({
     status: 302,
     location: `/games/${gameId}`,
   });
   const mallory = await player("mallory");
-  expect((await reply(await openInvite(token, mallory.cookie))).status).toBe(
-    410,
-  );
+  expect(await reply(await openInvite(token, mallory.cookie))).toMatchObject({
+    status: 410,
+    body: { state: "used" },
+  });
   expect((await reply(await openInvite(gameId, mallory.cookie))).status).toBe(
     404,
   );
@@ -395,9 +434,16 @@ test("a signed-in account that isn't the invitee gets 404 and the seat stays emp
   const gameId = sent.headers.get("location")!.split("/").at(-1)!;
   const mallory = await player("mallory");
 
-  expect(
-    (await reply(await openInvite(inviteToken(bob), mallory.cookie))).status,
-  ).toBe(404);
+  const wrong = await reply(await openInvite(inviteToken(bob), mallory.cookie));
+  expect(wrong).toMatchObject({
+    status: 404,
+    body: {
+      state: "wrong_account",
+      maskedEmail: masked(bob),
+      signedInAs: mallory.email,
+    },
+  });
+  expect(JSON.stringify(wrong.body)).not.toContain(bob);
   expect((await reply(await openInvite(gameId, mallory.cookie))).status).toBe(
     404,
   );
