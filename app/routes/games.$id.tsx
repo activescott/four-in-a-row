@@ -6,6 +6,7 @@ import {
   findGameForPlayer,
   gameState,
   invitedEmailFor,
+  listGames,
   playerEmails,
 } from "../game/games.server";
 import { displayName } from "../game/display";
@@ -27,6 +28,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     game: gameState(game, user.id),
     emails: await playerEmails(db, game),
     invitedEmail: await invitedEmailFor(db, game, user.id),
+    // Everyone the user plays, so two with one name can be told apart.
+    opponents: (await listGames(db, user.id)).map(
+      (g) => g.opponent ?? g.invited,
+    ),
   };
 }
 
@@ -93,7 +98,7 @@ function Star({ className }: { className: string }) {
 }
 
 export default function Board({ loaderData }: Route.ComponentProps) {
-  const { emails } = loaderData;
+  const { emails, opponents } = loaderData;
   const { game, ended } = useLiveGame(loaderData.game);
   const fetcher = useFetcher<typeof moveAction>();
   const opponent: Player = game.you === 1 ? 2 : 1;
@@ -102,8 +107,8 @@ export default function Board({ loaderData }: Route.ComponentProps) {
     game.status === "INVITED" ? loaderData.invitedEmail : null;
   const opponentName =
     !emails[opponent] && invitedEmail
-      ? `${displayName(invitedEmail)} (invited)`
-      : displayName(emails[opponent]);
+      ? `${displayName(invitedEmail, opponents)} (invited)`
+      : displayName(emails[opponent], opponents);
   // The poll saw the invitee join: reload once for their name.
   const { revalidate } = useRevalidator();
   const joined = game.status !== "INVITED" && !emails[opponent];
@@ -163,7 +168,9 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           mover === seat ? "ring-2 ring-slate-900 ring-offset-2" : ""
         }`}
       />
-      <span className="min-w-0 truncate">{label}</span>
+      <span className="min-w-0 truncate" title={label}>
+        {label}
+      </span>
     </p>
   );
 
@@ -210,7 +217,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
         </p>
         {last && (
           <p className="mt-1 text-base text-slate-700">
-            {`${last.player === game.you ? "You" : displayName(emails[last.player])} played column ${last.column + 1}.`}
+            {`${last.player === game.you ? "You" : displayName(emails[last.player], opponents)} played column ${last.column + 1}.`}
           </p>
         )}
       </div>

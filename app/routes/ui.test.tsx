@@ -158,9 +158,10 @@ test("the list gives two opponents with one local part their full addresses", ()
       row("g3", "cy@a.com", false),
     ],
   });
-  expect(html).toContain("bob@a.com");
-  expect(html).toContain("bob@b.com");
-  expect(html).toContain(">cy<");
+  const read = html.replace(/<wbr\/>/g, "");
+  expect(read).toContain("bob@a.com");
+  expect(read).toContain("bob@b.com");
+  expect(read).toContain(">cy<");
 });
 
 test("a game list row waiting on a join names the invited player", () => {
@@ -289,4 +290,50 @@ test("the wrong-account page names both addresses and how to fix it", () => {
     /This invite is for <strong>b•••@example.com<\/strong>, but you(&#x27;|')re signed in as <strong>carol@example.com<\/strong>\. Sign out, then tap the link in the email again\./,
   );
   expect(html).toMatch(/>Sign out<\/button>/);
+});
+
+test("the board gives an opponent who shares a name with another opponent their full address", () => {
+  const html = render("/games/:id", Board, {
+    game: state(),
+    emails,
+    opponents: ["bob@example.com", "bob@other.org"],
+  });
+  const read = text(html);
+  expect(read).toContain("bob@example.com played column 4.");
+  expect(read).toContain("bob@example.com</span>");
+  expect(read).not.toMatch(/>bob</);
+});
+
+test("the invited name on the board is told apart from another opponent too", () => {
+  const html = invitedBoard({ yourTurn: false, moveCount: 1 }).replace(
+    /<!-- -->/g,
+    "",
+  );
+  expect(html).toContain("bob (invited)");
+  const clash = render("/games/:id", Board, {
+    game: state({ status: "INVITED", yourTurn: false }),
+    emails: { 1: "alice@example.com", 2: null },
+    invitedEmail: "bob@example.com",
+    opponents: ["bob@example.com", "bob@other.org"],
+  }).replace(/<!-- -->/g, "");
+  expect(clash).toContain("bob@example.com (invited)");
+});
+
+test("a long address in the list can wrap after @ and dots, and still reads whole", () => {
+  const long = "margaret.henderson-smythe@mail.example-company.com";
+  const html = render("/games", Games, {
+    games: [
+      row("g1", long, false),
+      row("g2", "margaret.henderson-smythe@other.org", false),
+    ],
+  });
+  expect(html).toContain(
+    "margaret.<wbr/>henderson-smythe@<wbr/>mail.<wbr/>example-company.<wbr/>com",
+  );
+  expect(html.replace(/<wbr\/>/g, "")).toContain(long);
+});
+
+test("the board legend keeps the full name in a title when it is cut short", () => {
+  const html = render("/games/:id", Board, { game: state(), emails });
+  expect(html).toContain('title="bob"');
 });

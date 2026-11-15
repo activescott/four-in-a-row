@@ -2,6 +2,7 @@ import { data, Form, Link, redirect, useNavigation } from "react-router";
 import { requireAuth } from "../auth.server";
 import { getDb } from "../db.server";
 import { displayName } from "../game/display";
+import { Wrappable } from "../game/wrappable";
 import { appUrl } from "../app-url.server";
 import { createRematch, listGames } from "../game/games.server";
 import {
@@ -168,9 +169,13 @@ export default function Games({
                 />
                 <span className="flex min-w-0 flex-col">
                   <span className="min-w-0 break-words text-lg text-slate-900">
-                    {!game.opponent && game.invited
-                      ? `${displayName(game.invited, opponents)} (invited)`
-                      : displayName(game.opponent, opponents)}
+                    <Wrappable
+                      text={
+                        !game.opponent && game.invited
+                          ? `${displayName(game.invited, opponents)} (invited)`
+                          : displayName(game.opponent, opponents)
+                      }
+                    />
                   </span>
                   <span
                     className={
