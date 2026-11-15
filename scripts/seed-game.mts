@@ -1,5 +1,5 @@
 // Seeds two players and an ACTIVE game between them in the dev database, for
-// trying the board until invites (#14) land. Stop `npm run dev` first: PGlite
+// trying the board without an invite. Stop `npm run dev` first: PGlite
 // allows one process at a time.
 //
 //   node scripts/seed-game.mts first@example.com second@example.com

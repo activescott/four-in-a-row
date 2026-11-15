@@ -3,8 +3,8 @@ import type { PrismaClient } from "../generated/prisma/client";
 import { createPgliteDb } from "../pglite.server";
 import { formPost, get, logCapture, run } from "../test/routes";
 
-// Invites are a later step (#14), so these tests seed both players and the
-// game directly, and sign each player in with a session cookie from Auth.
+// These tests seed both players and the game directly (invites are in
+// invites.test.ts), and sign each player in with a session cookie from Auth.
 
 const { getDb, log } = vi.hoisted(() => ({
   getDb: vi.fn<() => Promise<PrismaClient>>(),
