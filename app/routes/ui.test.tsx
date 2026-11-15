@@ -163,9 +163,9 @@ test("the invite page explains the sign-in email and posts to itself, without th
   const html = render("/invite/:id", Invite, pending);
   expect(html).toMatch(/alice(<!-- -->)? invited you to play Four in a Row/);
   expect(html).toMatch(
-    /One more step\. We(&#x27;|')ll send a sign-in email to <strong>b•••@example.com<\/strong> so we know it(&#x27;|')s you\. No password needed\./,
+    /One more step\. We(&#x27;|')ll send a sign-in email to(<!-- -->)? <strong>b•••@example.com<\/strong> so we know it(&#x27;|')s you\. No password needed\./,
   );
-  expect(html).toMatch(/<form method="post" action="\/invite\/g1"/);
+  expect(html).toMatch(/<form[^>]*action="\/invite\/g1" method="post"/);
   expect(html).not.toMatch(/name="email"/);
   expect(html).toMatch(
     /<button type="submit"[^>]*>Send my sign-in email<\/button>/,
@@ -206,7 +206,7 @@ test("a used invite opened signed out offers sign-in back to the game", () => {
     "You&#x27;ve already joined this game. Sign in to play.",
   );
   expect(html).toMatch(
-    /<a[^>]*href="\/login\?redirectTo=%2Fgames%2Fg9"[^>]*class="[^"]*w-full[^"]*"[^>]*>Sign in<\/a>/,
+    /<a(?=[^>]*href="\/login\?redirectTo=%2Fgames%2Fg9")(?=[^>]*w-full)[^>]*>Sign in<\/a>/,
   );
 });
 

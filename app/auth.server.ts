@@ -152,6 +152,17 @@ export const { handleAuth, getSession, requireAuth, optionalAuth, logout } =
     },
   });
 
+// The magic link's host comes from the request (Host, or X-Forwarded-Host
+// behind Traefik), so a forged one would mail out a link to another site.
+// Production requires APP_URL, so there only its host is served.
+export function serveAuth(request: Request) {
+  const appUrl = env.APP_URL;
+  if (appUrl && new URL(request.url).host !== new URL(appUrl).host) {
+    return new Response("Misdirected Request", { status: 421 });
+  }
+  return handleAuth({ request });
+}
+
 export const { signInLoader, profileAuthLoader } = createAuthPageLoaders(auth, {
   listPasskeys,
 });
