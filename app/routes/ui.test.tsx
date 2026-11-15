@@ -189,6 +189,13 @@ test("every legend swatch has a slate border so a tinted one still shows on the 
   }
 });
 
+test("every legend swatch grows from the sm breakpoint so the yellow centre shows on laptops", () => {
+  for (const swatch of swatches(finishedBoard("won"))) {
+    expect(swatch).toContain("size-5");
+    expect(swatch).toContain("sm:size-6");
+  }
+});
+
 test("the last-move mark is a filled dot, not a ring that could be read as part of the yellow ring", () => {
   const html = render("/games/:id", Board, { game: state(), emails });
   const mark = (html.match(/<span[^>]*data-last-move[^>]*>/g) ?? [])[0];
