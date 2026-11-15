@@ -318,7 +318,7 @@ test("the New game form explains a bad address, your own address and the cap", a
   expect(log.capture.events("invite.capped")).toHaveLength(1);
 });
 
-test("an expired invite link says so, and its sign-in is refused by the gate", async () => {
+test("an expired invite link says so, and its sign-in sends nothing", async () => {
   const alice = await player("alice");
   const bob = address("bob");
   const sent = await sendInvite(alice, bob);
@@ -342,7 +342,13 @@ test("an expired invite link says so, and its sign-in is refused by the gate", a
       { referer: `/invite/${token}` },
     ),
   );
-  expect(refused.headers.get("location")).toBe("/login?error=NOT_INVITED");
+  // The same answer as a sent one (#43), but no sign-in email.
+  expect(refused.headers.get("location")).toContain(`/invite/${token}?sent=1`);
+  const readback = (await run(
+    capturedEmail.loader,
+    get(`/e2e/captured-email?email=${encodeURIComponent(bob)}`, E2E_SECRET),
+  )) as Response;
+  expect(await readback.json()).not.toHaveProperty("magicLink");
 });
 
 test("a used invite link can't seat anyone else", async () => {

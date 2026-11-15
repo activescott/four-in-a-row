@@ -211,23 +211,34 @@ test.each(OFF_SITE)(
   },
 );
 
-test("an address the gate does not allow is refused and no mail is sent", async () => {
-  const jar = new CookieJar();
+// #43: the answer must not say whether an address has an account or an
+// invite, so a refused address gets what an allowed one gets, cookie and all.
+test("an address the gate does not allow gets the same answer as one it allows, and no mail", async () => {
+  const shape = (response: Response) => ({
+    status: response.status,
+    location: response.headers.get("location"),
+    setCookie: response.headers
+      .getSetCookie()
+      .map((cookie) => cookie.replace(/=[^;]*/, "=<id>")),
+  });
+  const allowed = await requestEmail(
+    new CookieJar(),
+    await member("allowed-twin@example.com"),
+    "/profile",
+  );
 
-  const response = await requestEmail(jar, "stranger@example.com", "/profile");
+  const refused = await requestEmail(
+    new CookieJar(),
+    "stranger@example.com",
+    "/profile",
+  );
 
-  expect(response.status).toBe(302);
-  expect(response.headers.get("location")).toBe("/login?error=NOT_INVITED");
+  expect(shape(refused)).toEqual(shape(allowed));
+  expect(shape(refused).location).toMatch(/[?&]sent=1/);
   expect((await readCapturedEmail("stranger@example.com")).status).toBe(404);
   expect(
     await db.user.count({ where: { email: "stranger@example.com" } }),
   ).toBe(0);
-
-  const page = await run(login.loader, get("/login?error=NOT_INVITED"));
-  expect(page).toMatchObject({
-    errorCode: "NOT_INVITED",
-    error: expect.stringMatching(/invite/i),
-  });
 });
 
 test("a request for a host other than APP_URL's is refused and no mail is sent", async () => {
