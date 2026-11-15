@@ -6,9 +6,11 @@ import {
   findGameForPlayer,
   gameState,
   invitedEmailFor,
+  listGames,
   playerEmails,
 } from "../game/games.server";
 import { displayName } from "../game/display";
+import { Wrappable } from "../game/wrappable";
 import { useLiveGame } from "../game/live";
 import { COLUMNS, ROWS, type Player } from "../game/rules";
 import type { Route } from "./+types/games.$id";
@@ -27,6 +29,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     game: gameState(game, user.id),
     emails: await playerEmails(db, game),
     invitedEmail: await invitedEmailFor(db, game, user.id),
+    // Everyone the user plays, so two with one name can be told apart.
+    opponents: (await listGames(db, user.id)).map(
+      (g) => g.opponent ?? g.invited,
+    ),
   };
 }
 
@@ -45,8 +51,15 @@ const DISC_DIM: Record<Player, string> = {
   2: "bg-amber-200",
 };
 // Marks drawn on a disc: dark on yellow, white on red, so both stay legible.
+// The last-move mark is a ring, not a filled dot: a dark dot on red reads as
+// a hole, now that the empty holes are dark.
 const INK: Record<Player, string> = { 1: "text-white", 2: "text-slate-900" };
-const INK_BG: Record<Player, string> = { 1: "bg-white", 2: "bg-slate-900" };
+// An empty hole is dark, so a disc in any tint stands clear of it. WCAG
+// contrast against slate-900: red-300 9.30, amber-200 14.34, red-600 3.74,
+// amber-400 10.36. (Against the old white hole: 1.92, 1.24, 4.77, 1.72.)
+// The hole gets a 1 px lighter edge so the seven columns read on the navy board.
+// The winning ring is white on both colours: a dark ring vanishes on the holes.
+const HOLE = "bg-slate-900 ring-1 ring-inset ring-slate-700";
 const COLOUR: Record<Player, string> = { 1: "red", 2: "yellow" };
 
 const ERRORS: Record<string, string> = {
@@ -86,7 +99,7 @@ function Star({ className }: { className: string }) {
 }
 
 export default function Board({ loaderData }: Route.ComponentProps) {
-  const { emails } = loaderData;
+  const { emails, opponents } = loaderData;
   const { game, ended } = useLiveGame(loaderData.game);
   const fetcher = useFetcher<typeof moveAction>();
   const opponent: Player = game.you === 1 ? 2 : 1;
@@ -95,8 +108,8 @@ export default function Board({ loaderData }: Route.ComponentProps) {
     game.status === "INVITED" ? loaderData.invitedEmail : null;
   const opponentName =
     !emails[opponent] && invitedEmail
-      ? `${displayName(invitedEmail)} (invited)`
-      : displayName(emails[opponent]);
+      ? `${displayName(invitedEmail, opponents)} (invited)`
+      : displayName(emails[opponent], opponents);
   // The poll saw the invitee join: reload once for their name.
   const { revalidate } = useRevalidator();
   const joined = game.status !== "INVITED" && !emails[opponent];
@@ -131,7 +144,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           className={`size-6 shrink-0 rounded-full ${DISC[game.you]}`}
           aria-hidden="true"
         />
-        Your turn
+        Your turn.
       </>
     );
   } else if (!emails[opponent]) status = "Waiting for your opponent to join.";
@@ -142,7 +155,9 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           className={`size-6 shrink-0 rounded-full ${DISC[opponent]}`}
           aria-hidden="true"
         />
-        Waiting for {opponentName} ({COLOUR[opponent]}).
+        <span className="min-w-0 break-words">
+          <Wrappable text={`${opponentName}'s turn.`} />
+        </span>
       </>
     );
   }
@@ -156,7 +171,9 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           mover === seat ? "ring-2 ring-slate-900 ring-offset-2" : ""
         }`}
       />
-      <span className="min-w-0 truncate">{label}</span>
+      <span className="min-w-0 truncate" title={label}>
+        {label}
+      </span>
     </p>
   );
 
@@ -203,7 +220,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
         </p>
         {last && (
           <p className="mt-1 text-base text-slate-700">
-            {`${last.player === game.you ? "You" : displayName(emails[last.player])} played column ${last.column + 1}.`}
+            {`${last.player === game.you ? "You" : displayName(emails[last.player], opponents)} played column ${last.column + 1}.`}
           </p>
         )}
       </div>
@@ -232,22 +249,20 @@ export default function Board({ loaderData }: Route.ComponentProps) {
                 const isLast = last?.row === row && last.column === column;
                 const dim = game.winningCells.length > 0 && !isWin;
                 const ring =
-                  isWin && cell
-                    ? ` ring-4 ring-inset ${cell === 1 ? "ring-white" : "ring-slate-900"}`
-                    : "";
+                  isWin && cell ? " ring-4 ring-inset ring-white" : "";
                 return (
                   <span
                     key={row}
                     className={`flex aspect-square w-full items-center justify-center rounded-full ${
-                      cell ? (dim ? DISC_DIM[cell] : DISC[cell]) : "bg-white"
+                      cell ? (dim ? DISC_DIM[cell] : DISC[cell]) : HOLE
                     }${ring}`}
                   >
                     {cell && isWin && <Star className={INK[cell]} />}
                     {cell && isLast && !isWin && (
                       <span
-                        role="img"
-                        aria-label="Last move"
-                        className={`size-4 rounded-full ${INK_BG[cell]}`}
+                        data-last-move
+                        aria-hidden="true"
+                        className={`size-4 rounded-full border-[3px] border-current ${INK[cell]}`}
                       />
                     )}
                   </span>

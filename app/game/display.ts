@@ -1,7 +1,24 @@
-/** What to call a player: the part of their email before the @. */
-export function displayName(email: string | null): string {
+const localPart = (email: string) => email.split("@")[0]!.toLowerCase();
+
+/**
+ * What to call a player: the part of their email before the @. Pass the
+ * player's other opponents as `others`: when a different address among them
+ * shares that part (bob@a.com and bob@b.com), the full address is shown so
+ * the two can be told apart.
+ */
+export function displayName(
+  email: string | null,
+  others: readonly (string | null)[] = [],
+): string {
   if (!email) return "Invited player";
-  return email.split("@")[0] || email;
+  const short = email.split("@")[0] || email;
+  const clash = others.some(
+    (other) =>
+      other !== null &&
+      other.toLowerCase() !== email.toLowerCase() &&
+      localPart(other) === localPart(email),
+  );
+  return clash ? email : short;
 }
 
 /**
