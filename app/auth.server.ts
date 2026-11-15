@@ -6,7 +6,6 @@ import {
 } from "@activescott/auth-adapter-react-router";
 import {
   EmailProvider,
-  NodemailerTransport,
   validateEmailConfig,
   type EmailTransport,
 } from "@activescott/auth-provider-email";
@@ -20,7 +19,8 @@ import { createSignupGate } from "./auth/signup-gate.server";
 import { createUserStore } from "./auth/user-store.server";
 import { getDb } from "./db.server";
 import { logger } from "./logger.server";
-import { fromHeader, smtp } from "./mail/mailer.server";
+import { fromHeader, mailer, smtp } from "./mail/mailer.server";
+import { createSignInTransport } from "./mail/signin-transport.server";
 
 const env = process.env;
 const production = env.NODE_ENV === "production";
@@ -41,24 +41,24 @@ function required(name: string) {
   return value;
 }
 
-// Mail goes through SMTP_* from env. Dev without SMTP_HOST prints the link to
-// the console instead. Under E2E_TEST_MODE nothing is sent: the capture
+// Sign-in mail is worded and sent by the app (see createSignInTransport), over
+// the same SMTP_* settings as its other mail. Dev without SMTP_HOST prints the
+// link to the console instead. Under E2E_TEST_MODE nothing is sent: the capture
 // transport records each email for /e2e/captured-email.
 const e2eTestMode = env.E2E_TEST_MODE === "true";
-const smtpConfigured = Boolean(env.SMTP_HOST);
 const notSent: EmailTransport = { sendMagicLink: async () => true };
 
 export const captureEmailTransport = e2eTestMode
   ? new CaptureEmailTransport(notSent)
   : null;
 
-// The library's subject is "<subject> to <appName>".
+// The subject, HTML and text come from the app's transport; the library only
+// reads the sender, SMTP settings and expiry from here.
 export const emailConfig = validateEmailConfig({
   smtp,
   from: fromHeader,
   template: {
     appName: "Four in a Row",
-    subject: "Sign in",
   },
 });
 
@@ -72,8 +72,7 @@ const signup = createSignupGate({
 // The sign-up gate decides here, not before the send, which addresses get
 // mail; see createSignupGate.
 const emailTransport = signup.transport(
-  captureEmailTransport ??
-    new NodemailerTransport(!production && !smtpConfigured),
+  captureEmailTransport ?? createSignInTransport(mailer),
 );
 
 const jwtSecret = secret("JWT_SECRET");
