@@ -116,6 +116,37 @@ export function gameState(game: GameWithMoves, userId: string) {
 
 export type GameState = ReturnType<typeof gameState>;
 
+/**
+ * What changed since the client's move count: "unchanged", or the moves
+ * after it with the status. Null when `since` is ahead of the game.
+ */
+export function stateSince(game: GameWithMoves, userId: string, since: number) {
+  if (since > game.moveCount) return null;
+  if (since === game.moveCount) {
+    return { unchanged: true as const, moveCount: game.moveCount };
+  }
+  const state = gameState(game, userId);
+  return {
+    unchanged: false as const,
+    moveCount: state.moveCount,
+    status: state.status,
+    yourTurn: state.yourTurn,
+    result: state.result,
+    winningCells: state.winningCells,
+    lastMove: state.lastMove,
+    moves: game.moves
+      .filter((m) => m.number > since)
+      .map((m) => ({
+        number: m.number,
+        row: m.row,
+        column: m.column,
+        player: (m.playerId === game.playerOneId ? 1 : 2) as Player,
+      })),
+  };
+}
+
+export type StateUpdate = NonNullable<ReturnType<typeof stateSince>>;
+
 export type GameResult = "won" | "lost" | "draw" | null;
 
 function resultFor(

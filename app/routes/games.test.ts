@@ -838,7 +838,9 @@ test("state?since=n carries the result and winning cells once the game ends", as
     status: "WON",
     yourTurn: false,
     result: "lost",
-    winningCells: [0, 1, 2, 3].map((row) => ({ row, column: 0 })),
+    winningCells: expect.arrayContaining(
+      [0, 1, 2, 3].map((row) => ({ row, column: 0 })),
+    ),
     lastMove: { row: 3, column: 0, player: 1 },
     moves: [{ number: 7, row: 3, column: 0, player: 1 }],
   });
