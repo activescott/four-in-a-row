@@ -38,7 +38,7 @@ test("the SMTP mailer sets Reply-To when the mail has one", async () => {
   const sent: SendMailOptions[] = [];
   transport.sendMail = (async (options: SendMailOptions) => {
     sent.push(options);
-  }) as typeof transport.sendMail;
+  }) as unknown as typeof transport.sendMail;
   const mailer = createSmtpMailer({ transport, from: "noreply@example.com" });
 
   await mailer.send({ ...mail, replyTo: "alice@example.com" });

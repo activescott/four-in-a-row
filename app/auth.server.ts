@@ -20,7 +20,7 @@ import { createSignupGate } from "./auth/signup-gate.server";
 import { createUserStore } from "./auth/user-store.server";
 import { getDb } from "./db.server";
 import { logger } from "./logger.server";
-import { fromEmail, smtp } from "./mail/mailer.server";
+import { fromHeader, smtp } from "./mail/mailer.server";
 
 const env = process.env;
 const production = env.NODE_ENV === "production";
@@ -52,12 +52,13 @@ export const captureEmailTransport = e2eTestMode
   ? new CaptureEmailTransport(notSent)
   : null;
 
-const emailConfig = validateEmailConfig({
+// The library's subject is "<subject> to <appName>".
+export const emailConfig = validateEmailConfig({
   smtp,
-  from: fromEmail,
+  from: fromHeader,
   template: {
     appName: "Four in a Row",
-    subject: "Sign in to Four in a Row",
+    subject: "Sign in",
   },
 });
 

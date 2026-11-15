@@ -432,7 +432,7 @@ test("/e2e/captured-email also returns the last invite and turn email for an add
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({
     invite: {
-      subject: expect.stringContaining("invited you"),
+      subject: "You're invited to play Four in a Row",
       link: `http://localhost/invite/${inviteToken(bob)}`,
     },
   });

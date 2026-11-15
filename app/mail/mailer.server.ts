@@ -12,6 +12,7 @@ export type Mail = {
   subject: string;
   text: string;
   html: string;
+  replyTo?: string;
   /** The one link the mail is about, kept for the e2e readback. */
   link: string;
 };
@@ -29,9 +30,16 @@ export function createSmtpMailer({
   from: string;
 }): Mailer {
   return {
-    async send({ to, subject, text, html }) {
+    async send({ to, replyTo, subject, text, html }) {
       try {
-        await transport.sendMail({ from, to, subject, text, html });
+        await transport.sendMail({
+          from: { name: APP_NAME, address: from },
+          to,
+          ...(replyTo && { replyTo }),
+          subject,
+          text,
+          html,
+        });
         return true;
       } catch {
         return false;
@@ -80,6 +88,10 @@ export const smtp = {
 };
 export const fromEmail =
   env.FROM_EMAIL ?? (production ? "" : "noreply@localhost.test");
+
+// Every mail, sign-in included, shows as from "Four in a Row".
+export const APP_NAME = "Four in a Row";
+export const fromHeader = fromEmail && `"${APP_NAME}" <${fromEmail}>`;
 
 // Dev without SMTP_HOST prints each mail's link instead of sending it.
 const consoleMailer: Mailer = {
