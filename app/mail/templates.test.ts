@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { inviteEmail, turnEmail } from "./templates";
+import { inviteEmail, signInEmail, turnEmail } from "./templates";
 
 test("the invite email names the inviter and links to the invite", () => {
   const mail = inviteEmail({
@@ -83,4 +83,36 @@ test("names are escaped in the HTML part", () => {
 
   expect(mail.html).toContain("&lt;b&gt;&quot;x&quot;&amp;");
   expect(mail.html).not.toContain("<b>");
+});
+
+test("the sign-in email is about Four in a Row, states the expiry calmly and uses the app blue", () => {
+  const mail = signInEmail({
+    to: "b@example.com",
+    link: "https://app.example/auth/email/verify?challenge=c&key=k",
+    code: "123456",
+    minutes: 5,
+  });
+
+  expect(mail.kind).toBe("signin");
+  expect(mail.subject).toBe("Your sign-in link for Four in a Row");
+  expect(mail.text).toContain("Four in a Row");
+  expect(mail.text).toContain("Your sign-in code is: 123456");
+  expect(mail.text).toContain(
+    "This link works for 5 minutes. If it runs out, just ask for a new one.",
+  );
+  expect(mail.text).toContain(
+    "If you weren't expecting this, you can ignore it.",
+  );
+  expect(mail.text).not.toMatch(/expire/i);
+  expect(mail.html).toContain("#1d4ed8");
+  expect(mail.html).not.toContain("#6366f1");
+  expect(mail.html).toContain("Four in a Row");
+  expect(mail.html).toContain("This link works for 5 minutes.");
+  expect(mail.html).toContain("If you weren't expecting this");
+  expect(mail.html).toContain("123456");
+});
+
+test("the sign-in email says 1 minute, not 1 minutes", () => {
+  const mail = signInEmail({ to: "b@example.com", link: "l", minutes: 1 });
+  expect(mail.text).toContain("works for 1 minute.");
 });
