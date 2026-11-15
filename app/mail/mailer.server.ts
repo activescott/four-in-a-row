@@ -4,7 +4,7 @@ import nodemailer, { type Transporter } from "nodemailer";
 // library's sign-in mail but over the same SMTP settings: the email relay in
 // production. Under E2E_TEST_MODE nothing is sent and each mail is captured.
 
-export type MailKind = "invite" | "turn";
+export type MailKind = "invite" | "turn" | "signin";
 
 export type Mail = {
   kind: MailKind;

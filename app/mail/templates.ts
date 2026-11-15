@@ -78,3 +78,34 @@ export function turnEmail({
     link,
   };
 }
+
+/**
+ * The sign-in mail the auth library hands to the app's transport: the code and
+ * the link, worded for someone about to play, with the expiry stated calmly.
+ */
+export function signInEmail({
+  to,
+  link,
+  code,
+  minutes,
+}: {
+  to: string;
+  link: string;
+  code?: string;
+  minutes: number;
+}): Mail {
+  const lines = [`Tap the button to sign in and play ${APP}.`];
+  // Literal "Your sign-in code is: N" so mail apps offer AutoFill.
+  const codeLine = code && `Your sign-in code is: ${code}`;
+  const expiry = `This link works for ${minutes} ${minutes === 1 ? "minute" : "minutes"}. If it runs out, just ask for a new one.`;
+  const ignore = "If you weren't expecting this, you can ignore it.";
+  const body = [...lines, ...(codeLine ? [codeLine] : [])];
+  return {
+    kind: "signin",
+    to,
+    subject: `Your sign-in link for ${APP}`,
+    text: `${body.join("\n\n")}\n\n${link}\n\n${expiry}\n\n${ignore}`,
+    html: html(body, link, "Sign in and play", `${expiry} ${ignore}`),
+    link,
+  };
+}

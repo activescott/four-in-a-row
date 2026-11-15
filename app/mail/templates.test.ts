@@ -108,7 +108,7 @@ test("the sign-in email is about Four in a Row, states the expiry calmly and use
   expect(mail.html).not.toContain("#6366f1");
   expect(mail.html).toContain("Four in a Row");
   expect(mail.html).toContain("This link works for 5 minutes.");
-  expect(mail.html).toContain("If you weren't expecting this");
+  expect(mail.html).toContain("expecting this, you can ignore it");
   expect(mail.html).toContain("123456");
 });
 
