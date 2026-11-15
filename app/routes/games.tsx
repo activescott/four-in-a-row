@@ -155,7 +155,7 @@ export default function Games({
               key={game.id}
               className={`flex items-center justify-between gap-3 rounded-lg border border-slate-300 bg-white p-3 ${
                 game.yourTurn && !game.result
-                  ? "border-l-4 border-l-blue-700 font-semibold"
+                  ? "border-l-4 border-l-blue-700 pl-[9px] font-semibold"
                   : ""
               }`}
             >
@@ -167,7 +167,7 @@ export default function Games({
                   className={`size-6 shrink-0 rounded-full ${DISC[game.opponentSeat]}`}
                 />
                 <span className="flex min-w-0 flex-col">
-                  <span className="min-w-0 truncate text-lg text-slate-900">
+                  <span className="min-w-0 break-words text-lg text-slate-900">
                     {!game.opponent && game.invited
                       ? `${displayName(game.invited, opponents)} (invited)`
                       : displayName(game.opponent, opponents)}

@@ -51,7 +51,9 @@ const INK: Record<Player, string> = { 1: "text-white", 2: "text-slate-900" };
 // An empty hole is dark, so a disc in any tint stands clear of it. WCAG
 // contrast against slate-900: red-300 9.30, amber-200 14.34, red-600 3.74,
 // amber-400 10.36. (Against the old white hole: 1.92, 1.24, 4.77, 1.72.)
-const HOLE = "bg-slate-900";
+// The hole gets a 1 px lighter edge so the seven columns read on the navy board.
+// The winning ring is white on both colours: a dark ring vanishes on the holes.
+const HOLE = "bg-slate-900 ring-1 ring-inset ring-slate-700";
 const COLOUR: Record<Player, string> = { 1: "red", 2: "yellow" };
 
 const ERRORS: Record<string, string> = {
@@ -237,9 +239,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
                 const isLast = last?.row === row && last.column === column;
                 const dim = game.winningCells.length > 0 && !isWin;
                 const ring =
-                  isWin && cell
-                    ? ` ring-4 ring-inset ${cell === 1 ? "ring-white" : "ring-slate-900"}`
-                    : "";
+                  isWin && cell ? " ring-4 ring-inset ring-white" : "";
                 return (
                   <span
                     key={row}

@@ -182,7 +182,7 @@ const row = (id: string, opponent: string, yourTurn: boolean) => ({
   result: null,
 });
 
-test("long emails truncate and Rematch never shrinks", () => {
+test("long emails wrap in full and Rematch never shrinks", () => {
   const long = `${"a".repeat(80)}@example.com`;
   const html = render("/games", Games, {
     games: [{ ...row("g1", long, false), result: "won" }],
