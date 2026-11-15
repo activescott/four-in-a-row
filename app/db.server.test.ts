@@ -36,7 +36,13 @@ test("writes and reads one row of each model", async () => {
     data: { gameId: game.id, number: 1, playerId: one.id, column: 3, row: 0 },
   });
   await db.invite.create({
-    data: { gameId: game.id, inviterId: one.id, email: "two@example.com" },
+    data: {
+      gameId: game.id,
+      inviterId: one.id,
+      email: "two@example.com",
+      tokenHash: "test-token-hash",
+      expiresAt: new Date(Date.now() + 60_000),
+    },
   });
 
   const user = await db.user.findUniqueOrThrow({

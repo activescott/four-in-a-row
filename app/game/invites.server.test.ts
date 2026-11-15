@@ -208,6 +208,7 @@ test("inviting an address with an account and one without looks the same, and re
   const forMember = await invite(alice, member.email, watched);
   const forStranger = await invite(alice, stranger, watched);
 
+  expect(models).toContain("Invite");
   expect(models).not.toContain("User");
   expect(forMember).toEqual({ ok: true, gameId: expect.any(String) });
   expect(forStranger).toEqual({ ok: true, gameId: expect.any(String) });

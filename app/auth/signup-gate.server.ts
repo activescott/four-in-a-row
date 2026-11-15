@@ -13,8 +13,9 @@ export function parseSignupEmails(value: string | undefined): Set<string> {
   );
 }
 
-// Q3 in #2: only an address with an account, a pending invite, or a place in
-// SIGNUP_EMAILS is sent a sign-in email. Everyone else is sent nothing.
+// Q3 in #2: only an address with an account, a pending (unused, unexpired)
+// invite, or a place in SIGNUP_EMAILS is sent a sign-in email. Everyone else
+// is sent nothing.
 export function createSignupGate({
   db,
   signupEmails,
@@ -37,6 +38,7 @@ export function createSignupGate({
       where: {
         email: { equals: email, mode: "insensitive" },
         acceptedAt: null,
+        expiresAt: { gt: new Date() },
       },
       select: { id: true },
     });
