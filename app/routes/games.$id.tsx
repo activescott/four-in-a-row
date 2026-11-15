@@ -231,7 +231,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
         </p>
       )}
 
-      <div className="flex flex-col gap-1 text-slate-800">
+      <div className="flex flex-col gap-1 text-slate-800 sm:gap-y-1.5">
         {legend(game.you, `You are ${COLOUR[game.you]}`)}
         {legend(opponent, opponentName)}
       </div>
