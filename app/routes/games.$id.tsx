@@ -58,8 +58,23 @@ const INK: Record<Player, string> = { 1: "text-white", 2: "text-slate-900" };
 // contrast against slate-900: red-300 9.30, amber-200 14.34, red-600 3.74,
 // amber-400 10.36. (Against the old white hole: 1.92, 1.24, 4.77, 1.72.)
 // The hole gets a 1 px lighter edge so the seven columns read on the navy board.
-// The winning ring is white on both colours: a dark ring vanishes on the holes.
+// The winning ring is white outside, with a dark ring inside it: white alone
+// is 1.24:1 against pale yellow, and dark alone vanishes on the holes. The
+// dark ring is slate-900 on amber-400 10.36, white on slate-900 17.85.
+const WIN_RING = "shadow-[inset_0_0_0_4px_#fff,inset_0_0_0_7px_#0f172a]";
 const HOLE = "bg-slate-900 ring-1 ring-inset ring-slate-700";
+// Yellow discs, whatever their tint, get a thin inner ring so red and yellow
+// differ by shape and not hue alone. amber-800 on amber-400 4.14, on amber-200
+// 5.73; it is not a fill, so it stays quiet during play.
+function YellowMark({ player }: { player: Player }) {
+  return player === 2 ? (
+    <span
+      data-yellow-mark
+      aria-hidden="true"
+      className="absolute size-3/5 rounded-full border-2 border-amber-800"
+    />
+  ) : null;
+}
 const COLOUR: Record<Player, string> = { 1: "red", 2: "yellow" };
 
 const ERRORS: Record<string, string> = {
@@ -141,9 +156,11 @@ export default function Board({ loaderData }: Route.ComponentProps) {
     status = (
       <>
         <span
-          className={`size-6 shrink-0 rounded-full ${DISC[game.you]}`}
+          className={`relative flex size-6 shrink-0 items-center justify-center rounded-full ${DISC[game.you]}`}
           aria-hidden="true"
-        />
+        >
+          <YellowMark player={game.you} />
+        </span>
         Your turn.
       </>
     );
@@ -152,9 +169,11 @@ export default function Board({ loaderData }: Route.ComponentProps) {
     status = (
       <>
         <span
-          className={`size-6 shrink-0 rounded-full ${DISC[opponent]}`}
+          className={`relative flex size-6 shrink-0 items-center justify-center rounded-full ${DISC[opponent]}`}
           aria-hidden="true"
-        />
+        >
+          <YellowMark player={opponent} />
+        </span>
         <span className="min-w-0 break-words">
           <Wrappable text={`${opponentName}'s turn.`} />
         </span>
@@ -162,15 +181,20 @@ export default function Board({ loaderData }: Route.ComponentProps) {
     );
   }
 
+  // The loser's discs are tinted on the board, so their swatch is too.
+  const loser: Player | null =
+    game.result === "won" ? opponent : game.result === "lost" ? game.you : null;
   const legend = (seat: Player, label: string) => (
     <p
       className={`flex items-center gap-2 ${mover === seat ? "font-semibold" : ""}`}
     >
       <span
-        className={`inline-block size-4 shrink-0 rounded-full ${DISC[seat]} ${
-          mover === seat ? "ring-2 ring-slate-900 ring-offset-2" : ""
-        }`}
-      />
+        className={`relative flex size-4 shrink-0 items-center justify-center rounded-full ${
+          seat === loser ? DISC_DIM[seat] : DISC[seat]
+        } ${mover === seat ? "ring-2 ring-slate-900 ring-offset-2" : ""}`}
+      >
+        <YellowMark player={seat} />
+      </span>
       <span className="min-w-0 truncate" title={label}>
         {label}
       </span>
@@ -248,15 +272,16 @@ export default function Board({ loaderData }: Route.ComponentProps) {
                 const isWin = winning.has(`${row}:${column}`);
                 const isLast = last?.row === row && last.column === column;
                 const dim = game.winningCells.length > 0 && !isWin;
-                const ring =
-                  isWin && cell ? " ring-4 ring-inset ring-white" : "";
+                const ring = isWin && cell ? ` ${WIN_RING}` : "";
                 return (
                   <span
                     key={row}
-                    className={`flex aspect-square w-full items-center justify-center rounded-full ${
+                    data-win-ring={isWin && cell ? "" : undefined}
+                    className={`relative flex aspect-square w-full items-center justify-center rounded-full ${
                       cell ? (dim ? DISC_DIM[cell] : DISC[cell]) : HOLE
                     }${ring}`}
                   >
+                    {cell && <YellowMark player={cell} />}
                     {cell && isWin && <Star className={INK[cell]} />}
                     {cell && isLast && !isWin && (
                       <span
