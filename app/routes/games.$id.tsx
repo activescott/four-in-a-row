@@ -68,7 +68,7 @@ function Star({ className }: { className: string }) {
 
 export default function Board({ loaderData }: Route.ComponentProps) {
   const { emails } = loaderData;
-  const game = useLiveGame(loaderData.game);
+  const { game, ended } = useLiveGame(loaderData.game);
   const fetcher = useFetcher<typeof moveAction>();
   const opponent: Player = game.you === 1 ? 2 : 1;
   const opponentName = displayName(emails[opponent]);
@@ -208,6 +208,21 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           );
         })}
       </fetcher.Form>
+
+      {ended && (
+        <p role="alert" className="text-red-700">
+          {ended === "gone" ? (
+            "This game is no longer available."
+          ) : (
+            <>
+              You&apos;ve been signed out, so the board has stopped updating.{" "}
+              <Link to="/login" className="underline">
+                Sign in again
+              </Link>
+            </>
+          )}
+        </p>
+      )}
 
       {error && (
         <p role="alert" className="text-red-700">

@@ -88,15 +88,43 @@ export function applyUpdate(state: GameState, update: StateUpdate): GameState {
   };
 }
 
+/** Why polling stopped: the game is gone, or the session expired. */
+export type PollEnd = "gone" | "signed_out";
+
+/**
+ * A poll's answer, a reason to stop polling, or null to try again next tick
+ * (a deploy in progress or a server error).
+ */
+export async function readPoll(
+  response: Response,
+): Promise<StateUpdate | PollEnd | null> {
+  if (response.status === 404) return "gone";
+  // requireAuth redirects to /login, and fetch follows it to an HTML page.
+  if (response.redirected || [401, 403].includes(response.status)) {
+    return "signed_out";
+  }
+  if (!response.ok) return null;
+  if (!response.headers.get("content-type")?.includes("application/json")) {
+    return "signed_out";
+  }
+  return (await response.json()) as StateUpdate;
+}
+
 /**
  * The board page's game state, kept up to date by polling. A newer loader
- * result (after the player's own move) replaces it.
+ * result (after the player's own move) replaces it. `ended` says why polling
+ * stopped, if it did.
  */
-export function useLiveGame(loaded: GameState): GameState {
+export function useLiveGame(loaded: GameState): {
+  game: GameState;
+  ended: PollEnd | null;
+} {
   const [live, setLive] = useState(loaded);
+  const [ended, setEnded] = useState<PollEnd | null>(null);
   const [seen, setSeen] = useState(loaded);
   if (seen !== loaded) {
     setSeen(loaded);
+    if (loaded.id !== live.id) setEnded(null);
     if (loaded.id !== live.id || loaded.moveCount >= live.moveCount) {
       setLive(loaded);
     }
@@ -107,26 +135,26 @@ export function useLiveGame(loaded: GameState): GameState {
     latest.current = live;
   });
 
-  useEffect(
-    () =>
-      startPolling({
-        doc: document,
-        intervalMs: POLL_INTERVAL_MS,
-        poll: async () => {
-          const { id, moveCount } = latest.current;
-          const response = await fetch(
-            `/games/${id}/state?since=${moveCount}`,
-            { headers: { accept: "application/json" } },
-          );
-          if (!response.ok) return;
-          const update = (await response.json()) as StateUpdate;
-          setLive((current) =>
-            current.id === id ? applyUpdate(current, update) : current,
-          );
-        },
-      }),
-    [loaded.id],
-  );
+  const polling = ended === null;
+  useEffect(() => {
+    if (!polling) return;
+    return startPolling({
+      doc: document,
+      intervalMs: POLL_INTERVAL_MS,
+      poll: async () => {
+        const { id, moveCount } = latest.current;
+        const response = await fetch(`/games/${id}/state?since=${moveCount}`, {
+          headers: { accept: "application/json" },
+        });
+        const update = await readPoll(response);
+        if (update === null) return;
+        if (typeof update === "string") return setEnded(update);
+        setLive((current) =>
+          current.id === id ? applyUpdate(current, update) : current,
+        );
+      },
+    });
+  }, [loaded.id, polling]);
 
-  return live;
+  return { game: live, ended };
 }
