@@ -25,6 +25,15 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v6
+      # Every action must be pinned to a full commit SHA (see build.yaml).
+      - name: Check actions are pinned to commit SHAs
+        run: |
+          unpinned=$(grep -rnE '^\s*(-\s*)?uses:' .github/workflows | grep -vE 'uses:\s+[^@[:space:]]+@[0-9a-f]{40}(\s|$)' || true)
+          if [ -n "$unpinned" ]; then
+            echo "These actions are not pinned to a 40-hex commit SHA:"
+            echo "$unpinned"
+            exit 1
+          fi
       - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
