@@ -1,4 +1,7 @@
-import type { EmailProviderConfig } from "@activescott/auth-provider-email";
+import type {
+  EmailProviderConfig,
+  EmailTransport,
+} from "@activescott/auth-provider-email";
 import { afterAll, beforeAll, expect, test, vi } from "vitest";
 import type { PrismaClient } from "../generated/prisma/client";
 import { createLogger } from "../logger.server";
@@ -20,7 +23,9 @@ function gate(signupEmails?: string) {
   const capture = logCapture();
   const logger = createLogger(capture.destination);
   const signup = createSignupGate({ db, signupEmails, logger });
-  const inner = { sendMagicLink: vi.fn(async () => true) };
+  const inner = {
+    sendMagicLink: vi.fn<EmailTransport["sendMagicLink"]>(async () => true),
+  };
   return {
     gate: signup.gate,
     transport: signup.transport(inner),

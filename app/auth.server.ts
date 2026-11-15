@@ -16,7 +16,7 @@ import {
   PasskeyProvider,
 } from "@activescott/auth-provider-passkey";
 import { createPrismaIdentityStore } from "@activescott/auth-store-prisma";
-import { createSignupGate, NOT_INVITED } from "./auth/signup-gate.server";
+import { createSignupGate } from "./auth/signup-gate.server";
 import { createUserStore } from "./auth/user-store.server";
 import { getDb } from "./db.server";
 import { logger } from "./logger.server";
@@ -61,11 +61,20 @@ const emailConfig = validateEmailConfig({
   },
 });
 
-const emailTransport =
-  captureEmailTransport ??
-  new NodemailerTransport(!production && !smtpConfigured);
-
 const db = await getDb();
+const signup = createSignupGate({
+  db,
+  signupEmails: env.SIGNUP_EMAILS,
+  logger,
+});
+
+// The sign-up gate decides here, not before the send, which addresses get
+// mail; see createSignupGate.
+const emailTransport = signup.transport(
+  captureEmailTransport ??
+    new NodemailerTransport(!production && !smtpConfigured),
+);
+
 const jwtSecret = secret("JWT_SECRET");
 
 export const auth = new Auth({
@@ -86,7 +95,7 @@ export const auth = new Auth({
   }),
   // One replica for now; a database-backed store is activescott/auth#154 (G2).
   challengeStore: new InMemoryChallengeStore(),
-  gate: createSignupGate({ db, signupEmails: env.SIGNUP_EMAILS, logger }),
+  gate: signup.gate,
   logger: {
     warn: (message, context) =>
       logger.warn({ event: "auth.warn", ...context }, message),
@@ -144,8 +153,4 @@ export const { handleAuth, getSession, requireAuth, optionalAuth, logout } =
 
 export const { signInLoader, profileAuthLoader } = createAuthPageLoaders(auth, {
   listPasskeys,
-  errorMessages: {
-    [NOT_INVITED]:
-      "That address isn't signed up for Four in a Row. Ask a player to invite you.",
-  },
 });
