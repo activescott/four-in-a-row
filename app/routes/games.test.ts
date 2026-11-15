@@ -187,6 +187,18 @@ test("a legal move drops the disc to the lowest open row and passes the turn", a
   ]);
 });
 
+test("a move emails the opponent that it's their turn", async () => {
+  const { captureMailer } = await import("../mail/mailer.server");
+  const { one, two, game } = await activeGame();
+
+  expect((await move(one, game.id, 3)).status).toBe(200);
+
+  expect(captureMailer!.last(two.email, "turn")).toMatchObject({
+    link: `http://localhost/games/${game.id}`,
+  });
+  expect(captureMailer!.last(one.email, "turn")).toBeNull();
+});
+
 test("a move out of turn is refused with 409 and changes nothing", async () => {
   const { one, two, game } = await activeGame();
 
