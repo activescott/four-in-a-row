@@ -1,5 +1,7 @@
 import nodemailer, { type SendMailOptions } from "nodemailer";
 import { expect, test } from "vitest";
+import { createLogger } from "../logger.server";
+import { logCapture } from "../test/routes";
 import { CaptureMailer, createSmtpMailer, type Mail } from "./mailer.server";
 
 const mail: Mail = {
@@ -54,6 +56,46 @@ test("the SMTP mailer answers false instead of throwing when the send fails", as
   const mailer = createSmtpMailer({ transport, from: "noreply@example.com" });
 
   expect(await mailer.send(mail)).toBe(false);
+});
+
+test("the SMTP mailer logs why the relay refused, without the link, code, body or full address", async () => {
+  const transport = nodemailer.createTransport({ jsonTransport: true });
+  transport.sendMail = (async () => {
+    throw Object.assign(new Error("550 5.7.1 Relay access denied"), {
+      code: "EENVELOPE",
+      responseCode: 550,
+      command: "RCPT TO",
+    });
+  }) as typeof transport.sendMail;
+  const log = logCapture();
+  const mailer = createSmtpMailer({
+    transport,
+    from: "noreply@example.com",
+    logger: createLogger(log.destination),
+  });
+
+  const signin = {
+    ...mail,
+    kind: "signin" as const,
+    text: "Your code is 482913",
+    link: "https://app.example/verify?token=secret-token",
+  };
+  expect(await mailer.send(signin)).toBe(false);
+
+  expect(log.events("email.send.failed")).toEqual([
+    expect.objectContaining({
+      event: "email.send.failed",
+      kind: "signin",
+      code: "EENVELOPE",
+      responseCode: 550,
+      command: "RCPT TO",
+      message: "550 5.7.1 Relay access denied",
+    }),
+  ]);
+  const logged = JSON.stringify(log.lines);
+  expect(logged).not.toContain("secret-token");
+  expect(logged).not.toContain("482913");
+  expect(logged).not.toContain("b@example.com");
 });
 
 test("the capture mailer keeps the last mail of each kind per address and sends nothing", async () => {
