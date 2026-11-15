@@ -192,7 +192,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
       className={`flex items-center gap-2 ${mover === seat ? "font-semibold" : ""}`}
     >
       <span
-        className={`relative flex size-5 shrink-0 items-center justify-center rounded-full border border-slate-500 ${
+        className={`relative flex size-5 shrink-0 items-center justify-center rounded-full border border-slate-500 sm:size-6 ${
           seat === loser ? DISC_DIM[seat] : DISC[seat]
         } ${mover === seat ? "ring-2 ring-slate-900 ring-offset-2" : ""}`}
       >
