@@ -2,3 +2,6 @@ build/
 .react-router/
 package-lock.json
 app/generated/
+# release-please generates these
+.release-please-manifest.json
+CHANGELOG.md
