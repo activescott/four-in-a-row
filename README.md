@@ -32,7 +32,15 @@ With `DATABASE_URL` set, the app uses Postgres instead of PGlite. Health checks 
 
 ## Sign-in
 
-Sign-in uses [`@activescott/auth`](https://github.com/activescott/auth): an email link or code at `/login`, and passkeys added from `/profile`. Only an address that already has an account, has a pending invite, or is listed in `SIGNUP_EMAILS` is sent a sign-in email; every other address gets the same answer, so the form never says which addresses can sign in. The library still stores a code for that address, so a correct guess reaches verify, which inserts the account before the gate runs. An account counts only once the gate has approved it (`users.approved_at`), so the gate refuses a sign-in to any unapproved account without an invite or a `SIGNUP_EMAILS` place and deletes it, and the sign-in email goes only to approved accounts.
+Sign-in uses [`@activescott/auth`](https://github.com/activescott/auth): an email link or code at `/login`, and passkeys added from `/profile`. Anyone can sign up: a never-seen address that enters its email at `/login` is sent a sign-in email, and a verified sign-in creates the account. To keep the app from becoming a way to mail strangers, every sign-in, invite and turn email is checked against send limits and recorded in the `email_sends` table (limits in `app/mail/send-limits.server.ts`):
+
+| Limit                                          | Value              | Mail it counts           |
+| ---------------------------------------------- | ------------------ | ------------------------ |
+| Per address                                    | 3 an hour, 6 a day | Sign-in, invite and turn |
+| Per client IP, to addresses without an account | 10 a day           | Sign-in and invite       |
+| Site-wide, to addresses without an account     | 100 a day          | Sign-in and invite       |
+
+Over a limit, nothing is sent, the form gives the same answer as for a sent email, and the app logs `email.limit` with the reason (`address`, `ip` or `global`; `global` at error level). So the form never says which addresses have an account. The client IP is the last `X-Forwarded-For` hop, the one Traefik appends, as for the auth library's own rate limits. Rows older than 2 days are deleted on write.
 
 ## Invites
 
@@ -45,7 +53,6 @@ Sign-in uses [`@activescott/auth`](https://github.com/activescott/auth): an emai
 | `APP_URL`                                                         | Canonical URL for passkeys and email links. Required in production.                        |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Outgoing mail. In dev without `SMTP_HOST`, the link is printed to the console.             |
 | `FROM_EMAIL`                                                      | Sender address.                                                                            |
-| `SIGNUP_EMAILS`                                                   | Addresses that may sign up without an invite, separated by commas or spaces.               |
 | `E2E_TEST_MODE`                                                   | `true` captures all mail instead of sending it. Never set in production.                   |
 | `E2E_CAPTURE_SECRET`                                              | Required with `E2E_TEST_MODE`; the `x-e2e-secret` header for `/e2e/captured-email?email=`. |
 

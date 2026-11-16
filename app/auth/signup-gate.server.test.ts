@@ -49,12 +49,17 @@ const attempt = (identifier: string) => ({
 const CONFIG = {} as EmailProviderConfig;
 const LINK = "http://localhost/auth/email/verify?challenge=c&key=k";
 
+// A client of its own per call, unless a test says which, so the per-IP limit
+// doesn't tie the tests together.
+let ipSeq = 0;
+const nextIp = () => `192.0.2.${++ipSeq % 250}`;
+
 // The sign-in email for this address from this client: true for every
 // address, and whether the inner transport was asked to send it.
 async function signInMail(
   signup: ReturnType<typeof gate>,
   email: string,
-  ip: string | null = "198.51.100.1",
+  ip: string | null = nextIp(),
 ) {
   const ask = () =>
     signup.transport.sendMagicLink(email, LINK, CONFIG, { code: "123456" });
@@ -225,25 +230,28 @@ test("the IP cap treats an IPv6 /64 as one client", async () => {
   ).toMatchObject({ sent: false });
 });
 
-test("the IP cap doesn't count mail to addresses that have an account", async () => {
+test("the IP cap doesn't count mail to addresses that have an account, and doesn't hold one back", async () => {
   const signup = gate();
-  await db.user.create({
-    data: { email: "ip-member@example.com", approvedAt: new Date() },
-  });
-  await sentBefore(SEND_LIMITS.ipPerDay, {
-    address: "ip-member@example.com",
-    ip: "203.0.113.20",
-    ageMs: 3 * 60 * 60 * 1000,
-  });
+  for (let n = 0; n < SEND_LIMITS.ipPerDay; n++) {
+    const address = `ip-account-${n}@example.com`;
+    await db.user.create({ data: { email: address, approvedAt: new Date() } });
+    await sentBefore(1, { address, ip: "203.0.113.20" });
+  }
 
   expect(
     await signInMail(signup, "ip-other@example.com", "203.0.113.20"),
   ).toMatchObject({ sent: true });
-  // And an account holder is not held to the IP cap either.
-  await sentBefore(SEND_LIMITS.ipPerDay, {
-    address: "someone@example.com",
-    ip: "203.0.113.21",
+
+  // Now the IP is over its cap, but an account holder is still sent mail.
+  await db.user.create({
+    data: { email: "ip-member@example.com", approvedAt: new Date() },
   });
+  for (let n = 0; n < SEND_LIMITS.ipPerDay; n++) {
+    await sentBefore(1, {
+      address: `ip-stranger-${n}@example.com`,
+      ip: "203.0.113.21",
+    });
+  }
   expect(
     await signInMail(signup, "ip-member@example.com", "203.0.113.21"),
   ).toMatchObject({ sent: true });

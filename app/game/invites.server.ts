@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { PrismaClient } from "../generated/prisma/client";
 import { logger } from "../logger.server";
 import type { Mailer } from "../mail/mailer.server";
+import { reserveSend } from "../mail/send-limits.server";
 import { inviteEmail } from "../mail/templates";
 
 // Invites (#14): the app emails a random, single-use token that expires in
@@ -43,9 +44,11 @@ export async function createInvite(
     inviterEmail: string;
     email: string;
     appUrl: string;
+    /** The inviter's address as the proxy saw it, for the send limits. */
+    ip: string | null;
   },
 ): Promise<InviteOutcome> {
-  const { inviterId, inviterEmail, appUrl } = input;
+  const { inviterId, inviterEmail, appUrl, ip } = input;
   const email = input.email.trim().toLowerCase();
   if (email.length > 254 || !EMAIL.test(email)) {
     return { ok: false, error: "invalid_email" };
@@ -94,6 +97,14 @@ export async function createInvite(
   }
 
   const { gameId, inviteId } = created;
+  // Over a send limit (#58) the invite still stands and the answer is the
+  // same as for a sent one, so the form never says which addresses are capped
+  // or have an account. The invitee can still sign in from /login, which is
+  // under the same limits. The invite keeps counting toward the pending cap.
+  if (!(await reserveSend(db, { address: email, kind: "invite", ip })).ok) {
+    logger.info({ event: "game.created", gameId, userId: inviterId });
+    return { ok: true, gameId };
+  }
   const link = new URL(`/invite/${token}`, appUrl).toString();
   const sent = await mailer.send(
     inviteEmail({ to: email, inviterEmail, link }),

@@ -287,7 +287,7 @@ test("an address over the IP cap gets the same answer, and no mail", async () =>
   const request = formPost(
     "/auth/email/initiate",
     { email, redirectTo: "/profile" },
-    { referer: "/login" },
+    { referer: "/login?redirectTo=%2Fprofile" },
   );
   // Traefik appends the peer it saw; the caller's own claims come first.
   request.headers.set("x-forwarded-for", "10.9.9.9, 203.0.113.50");
@@ -413,8 +413,8 @@ test("a never-seen address gets a sign-in email, signs in with the code and reac
   const { code } = await (await readCapturedEmail(email)).json();
   const response = await auth(
     formPost(
-      "/auth/email/verify",
-      { code, redirectTo: "/games" },
+      "/auth/email/verify?redirectTo=%2Fgames",
+      { code },
       { cookie: jar.header(), referer: "/login" },
     ),
   );

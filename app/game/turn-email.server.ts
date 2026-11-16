@@ -1,6 +1,7 @@
 import type { PrismaClient } from "../generated/prisma/client";
 import { logger } from "../logger.server";
 import type { Mailer } from "../mail/mailer.server";
+import { reserveSend } from "../mail/send-limits.server";
 import { turnEmail } from "../mail/templates";
 
 // "Your turn" email (R6 in #1, design #2). The opponent counts as watching
@@ -52,6 +53,10 @@ export async function notifyTurn(
   const to = users.find((u) => u.id === nextId)?.email;
   const opponentEmail = users.find((u) => u.id === moverId)?.email;
   if (!to || !opponentEmail) return;
+  // Only the per-address limit applies: turn mail goes to existing players.
+  if (!(await reserveSend(db, { address: to, kind: "turn", ip: null })).ok) {
+    return;
+  }
   const link = new URL(`/games/${gameId}`, appUrl).toString();
   const sent = await mailer.send(turnEmail({ to, opponentEmail, link }));
   logger.info({

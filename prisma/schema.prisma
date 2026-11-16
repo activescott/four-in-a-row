@@ -93,3 +93,17 @@ model Invite {
   @@index([inviterId])
   @@map("invites")
 }
+
+// One row per app email sent to an address, for the send limits in
+// app/mail/send-limits.server.ts. Rows older than 2 days are deleted on write.
+model EmailSend {
+  id        String   @id @default(uuid())
+  address   String // lowercased
+  kind      String // "signin" | "invite" | "turn"
+  ip        String? // client IP key; null for turn mail
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([address, createdAt])
+  @@index([createdAt])
+  @@map("email_sends")
+}

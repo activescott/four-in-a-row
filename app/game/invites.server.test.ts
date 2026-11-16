@@ -206,7 +206,7 @@ test("accepted and expired invites don't count toward the cap", async () => {
   expect((await invite(alice, address("after-expiry"))).ok).toBe(true);
 });
 
-test("inviting an address with an account and one without looks the same, and reads no user", async () => {
+test("inviting an address with an account and one without looks the same, and does the same work", async () => {
   const alice = await user("alice");
   const member = await user("member");
   const stranger = address("stranger");
@@ -225,10 +225,13 @@ test("inviting an address with an account and one without looks the same, and re
   }) as unknown as PrismaClient;
 
   const forMember = await invite(alice, member.email, watched);
+  const memberCalls = models.splice(0);
   const forStranger = await invite(alice, stranger, watched);
 
-  expect(models).toContain("Invite");
-  expect(models).not.toContain("User");
+  // The send limits look the address up (an account is exempt from the IP
+  // and site-wide caps), for every address alike.
+  expect(memberCalls).toContain("Invite");
+  expect(models).toEqual(memberCalls);
   expect(forMember).toEqual({ ok: true, gameId: expect.any(String) });
   expect(forStranger).toEqual({ ok: true, gameId: expect.any(String) });
   const memberMail = mailer.last(member.email, "invite")!;
@@ -256,6 +259,7 @@ test("a failed send undoes the game and reports it, so the cap isn't used up", a
     inviterEmail: alice.email,
     email: address("bob"),
     appUrl: APP_URL,
+    ip: "198.51.100.250",
   });
 
   expect(result).toEqual({ ok: false, error: "not_sent" });

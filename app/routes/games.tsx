@@ -1,5 +1,6 @@
 import { data, Form, Link, redirect, useNavigation } from "react-router";
 import { requireAuth } from "../auth.server";
+import { clientIp } from "../auth/client-ip.server";
 import { getDb } from "../db.server";
 import { displayName } from "../game/display";
 import { Wrappable } from "../game/wrappable";
@@ -48,6 +49,7 @@ export async function action({ request }: Route.ActionArgs) {
       inviterEmail: user.email,
       email,
       appUrl: appUrl(request),
+      ip: clientIp(request),
     });
     if (result.ok) return redirect(`/games/${result.gameId}`);
     if (result.error === "already_invited") {
