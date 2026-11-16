@@ -13,6 +13,7 @@ import {
 } from "../game/invites.server";
 import { mailer } from "../mail/mailer.server";
 import type { Player } from "../game/rules";
+import { CONTROL_BORDER } from "../controls";
 import type { Route } from "./+types/games";
 
 export function meta() {
@@ -110,7 +111,7 @@ export default function Games({
           defaultValue={
             actionData && "email" in actionData ? String(actionData.email) : ""
           }
-          className="min-h-11 min-w-0 rounded-lg border border-slate-400 px-3 text-lg"
+          className={`min-h-11 min-w-0 rounded-lg border ${CONTROL_BORDER} px-3 text-lg`}
         />
         <button
           type="submit"

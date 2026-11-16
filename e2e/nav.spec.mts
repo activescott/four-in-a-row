@@ -79,7 +79,7 @@ test("in dark mode the profile page still has a light background", async ({
 }, testInfo) => {
   const page = await signedInPage(browser, testInfo.project.use, "dark");
   await page.goto("/profile");
-  const container = page.locator("main > *").first();
+  const container = page.locator("main > *:not(nav)").first();
   await expect(container).toHaveCSS("color-scheme", "light");
   const lightness = await container.evaluate((el) => {
     // Reads any CSS colour (Tailwind's are oklch) as 0-255 RGBA via a canvas.
