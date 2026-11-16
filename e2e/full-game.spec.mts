@@ -52,6 +52,15 @@ async function confirmSignIn(page: Page, magicLink: string) {
   await page.getByRole("button", { name: "Confirm sign-in" }).click();
 }
 
+test("a signed-out visitor reaches the sign-in form from the home page", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByLabel("Email")).toBeVisible();
+});
+
 const name = (email: string) => email.split("@")[0]!;
 const column = (page: Page, n: number) =>
   page.getByRole("button", { name: `Drop a disc in column ${n}` });
