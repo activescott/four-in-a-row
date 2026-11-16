@@ -63,7 +63,7 @@ test.each([
   ["name+a+b@example.com", "name@example.com"],
   ["name+1@gmail.com", "name@gmail.com"],
   ["n.a.m.e@gmail.com", "name@gmail.com"],
-  ["N.a.M.e+news@googlemail.com", "name@googlemail.com"],
+  ["N.a.M.e+news@googlemail.com", "name@gmail.com"],
   // Dots count everywhere but Gmail.
   ["n.a.m.e@example.com", "n.a.m.e@example.com"],
   // Nothing left of the local part to key on: leave it alone.

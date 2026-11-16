@@ -54,7 +54,7 @@ const DAY_MS = 24 * HOUR_MS;
 
 /**
  * The key an address is counted under: NFKC-normalised and lowercased, without a `+tag` in the
- * local part, and for Gmail without dots in it, since all of those reach one
+ * local part, and for Gmail (googlemail.com counts as gmail.com) without dots in it, since all of those reach one
  * inbox. Only the key changes, never the address the mail goes to.
  */
 export function bucketKey(address: string): string {
@@ -68,12 +68,12 @@ export function bucketKey(address: string): string {
   if (quoted) local = quoted[1]!;
   else if (local.startsWith('"')) return lower;
   // "gmail.com." is the same domain as "gmail.com".
-  const domain = lower.slice(at + 1).replace(/\.$/, "");
+  // googlemail.com is the same inbox as gmail.com, so it shares its bucket.
+  let domain = lower.slice(at + 1).replace(/\.$/, "");
+  if (domain === "googlemail.com") domain = "gmail.com";
   const plus = local.indexOf("+");
   if (plus > 0) local = local.slice(0, plus);
-  if (domain === "gmail.com" || domain === "googlemail.com") {
-    local = local.replaceAll(".", "");
-  }
+  if (domain === "gmail.com") local = local.replaceAll(".", "");
   return `${local}@${domain}`;
 }
 
