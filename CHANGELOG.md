@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.0](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.1.0...four-in-a-row-v0.2.0) (2026-11-16)
+
+
+### Features
+
+* game-aware sign-in email ([#48](https://github.com/activescott/four-in-a-row/issues/48)) ([d6e21e5](https://github.com/activescott/four-in-a-row/commit/d6e21e5e956c48e72a38486c8e10880b4cc4db84))
+* invite a player by email to start a game ([#42](https://github.com/activescott/four-in-a-row/issues/42)) ([e1f8b82](https://github.com/activescott/four-in-a-row/commit/e1f8b82eef2769e38bcea2add27abe0bd10866d9))
+* open sign-up with per-address, per-IP and site-wide email limits ([#59](https://github.com/activescott/four-in-a-row/issues/59)) ([9c2cb31](https://github.com/activescott/four-in-a-row/commit/9c2cb31d7e72561182156d434ff4d5b6c4ab9ca4))
+* update the board live by polling /state ([#36](https://github.com/activescott/four-in-a-row/issues/36)) ([076103e](https://github.com/activescott/four-in-a-row/commit/076103ec416368fa931bf2750a01272293dea635))
+
+
+### Bug Fixes
+
+* bigger legend swatch on laptop screens ([#54](https://github.com/activescott/four-in-a-row/issues/54)) ([b8cbf9a](https://github.com/activescott/four-in-a-row/commit/b8cbf9a9fa9b06de2a019bb2d2a5ec75c6886b14))
+* finished-board contrast, unique opponent names and review nits ([#47](https://github.com/activescott/four-in-a-row/issues/47)) ([9af66fa](https://github.com/activescott/four-in-a-row/commit/9af66fab92080044b68228dc5584c99c15d09f5c))
+* finished-board cues that don't rely on hue ([#52](https://github.com/activescott/four-in-a-row/issues/52)) ([01eec19](https://github.com/activescott/four-in-a-row/commit/01eec192ef22de6256fe4b9cdf06fc8722fc2ac7))
+* home page links to sign-in ([#56](https://github.com/activescott/four-in-a-row/issues/56)) ([394e798](https://github.com/activescott/four-in-a-row/commit/394e798c8cd80fa2d16eee7553005462aff1149e))
+* log SMTP relay errors ([#51](https://github.com/activescott/four-in-a-row/issues/51)) ([fe592fe](https://github.com/activescott/four-in-a-row/commit/fe592feae9969b5ced7abcd8fb52558789351ab1))
+* upgrade to @activescott/auth 6 so passkey options are rate-limited ([#37](https://github.com/activescott/four-in-a-row/issues/37)) ([25b8326](https://github.com/activescott/four-in-a-row/commit/25b832604991e9a3613eae5f02b4776f7ecace5d))
+
 ## 0.1.0 (2026-11-15)
 
 
