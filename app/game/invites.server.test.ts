@@ -136,7 +136,16 @@ test("an address that isn't an email, or the inviter's own, is refused and nothi
   const alice = await user("alice");
   const games = await db.game.count();
 
-  for (const email of ["", "bob", "bob@", "@example.com", "a b@example.com"]) {
+  for (const email of [
+    "",
+    "bob",
+    "bob@",
+    "@example.com",
+    "a b@example.com",
+    "bob(c1)@example.com",
+    "bob@example.com(x)",
+    '"b\\ob"@example.com',
+  ]) {
     expect(await invite(alice, email)).toEqual({
       ok: false,
       error: "invalid_email",

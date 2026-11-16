@@ -119,6 +119,80 @@ test.each([
   },
 );
 
+test.each([
+  // Unicode and punycode spellings of one domain share a key.
+  ["name@b\u00FCcher.de", "name@xn--bcher-kva.de"],
+  ["name@B\u00DCCHER.de", "name@xn--bcher-kva.de"],
+  ["name@xn--bcher-kva.de", "name@xn--bcher-kva.de"],
+  // U+3002 is a dot, and a soft hyphen is dropped.
+  ["name@example\u3002com", "name@example.com"],
+  ["name@exam\u00ADple.com", "name@example.com"],
+  ["name@b\u00FCcher\u3002de.", "name@xn--bcher-kva.de"],
+])("the domain of %j is keyed in its ASCII form: %s", (address, key) => {
+  expect(bucketKey(address)).toBe(key);
+});
+
+// Through reserveSend, so the key that is counted is the one that is checked.
+async function fillBucket(bucket: string) {
+  await db.emailSend.createMany({
+    data: Array.from({ length: SEND_LIMITS.signInPerBucketPerDay }, (_, n) => ({
+      address: `x${n}@example.com`,
+      bucket,
+      kind: "signin",
+      ip: `192.0.2.${n + 1}`,
+      createdAt: new Date(Date.now() - THREE_HOURS),
+    })),
+  });
+}
+
+test("reserveSend: gmail.com and googlemail.com spellings share one daily cap", async () => {
+  await fillBucket("victim@gmail.com");
+  for (const address of [
+    "victim@googlemail.com",
+    "v.i.c.t.i.m+x@googlemail.com",
+    "victim@gmail.com",
+  ]) {
+    expect(await send(address, "198.51.100.1")).toEqual({
+      ok: false,
+      reason: "address",
+    });
+  }
+});
+
+test("reserveSend: a quoted spelling shares the cap of the plain address", async () => {
+  await fillBucket("victim@example.com");
+  expect(await send('"victim+1"@example.com', "198.51.100.1")).toEqual({
+    ok: false,
+    reason: "address",
+  });
+});
+
+test("reserveSend: an IDN domain shares the cap with its punycode form", async () => {
+  await fillBucket("victim@xn--bcher-kva.de");
+  expect(await send("victim@b\u00FCcher.de", "198.51.100.1")).toEqual({
+    ok: false,
+    reason: "address",
+  });
+});
+
+test.each([
+  "victim(c1)@example.com",
+  "(c)victim@example.com",
+  "victim@example.com(x)",
+  '"v\\ictim"@example.com',
+  '"vic".tim@example.com',
+])("reserveSend refuses %s and records nothing", async (address) => {
+  expect(await send(address, "198.51.100.1")).toEqual({
+    ok: false,
+    reason: "address",
+  });
+  expect(await db.emailSend.count()).toBe(0);
+  for (const kind of ["invite", "turn"] as const) {
+    expect((await send(address, null, kind)).ok).toBe(false);
+  }
+  expect(await db.emailSend.count()).toBe(0);
+});
+
 test("name+1@gmail.com and n.a.m.e@gmail.com share one bucket with name@gmail.com", async () => {
   const variants = [
     "name+1@gmail.com",
