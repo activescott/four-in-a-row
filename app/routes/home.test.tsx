@@ -19,8 +19,7 @@ afterAll(async () => {
 const { auth } = await import("../auth.server");
 const home = await import("./home");
 
-async function signedInCookie() {
-  const email = "home-test@example.com";
+async function signedInCookie(email = "home-test@example.com") {
   const user = await db.user.create({
     data: {
       email,
@@ -75,4 +74,13 @@ test("the home page copy is 20px, balanced, and the sign-in hint is true to /log
   expect(html).toMatch(
     /Sign in<\/a><p class="[^"]*\btext-base\b[^"]*\btext-balance\b[^"]*">We&#x27;ll email you a link or code\. No password needed\.<\/p>/,
   );
+});
+
+test("the root loader gives the header the signed-in email, or null", async () => {
+  const root = await import("../root");
+  expect(await run(root.loader, get("/"))).toEqual({ email: null });
+  const cookie = await signedInCookie("root-test@example.com");
+  expect(await run(root.loader, get("/", { cookie }))).toEqual({
+    email: "root-test@example.com",
+  });
 });

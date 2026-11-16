@@ -14,7 +14,7 @@ export function meta() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const data = await signInLoader(request);
-  if (await getSession(request)) throw redirect(data.redirectTo ?? "/profile");
+  if (await getSession(request)) throw redirect(data.redirectTo ?? "/games");
   return data;
 }
 
@@ -100,7 +100,7 @@ export default function Login({ loaderData }: Route.ComponentProps) {
         </p>
       )}
 
-      <PasskeySignIn redirectTo={redirectTo ?? "/profile"} />
+      <PasskeySignIn redirectTo={redirectTo ?? "/games"} />
     </main>
   );
 }

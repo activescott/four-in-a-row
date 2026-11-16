@@ -298,9 +298,9 @@ test("only the rows where it is your turn say so", () => {
   expect(html.match(/Their turn/g)).toHaveLength(1);
 });
 
-test("the game list has a New game form asking who to play", () => {
+test("the game list opens with a full-width New game button asking who to play", () => {
   const html = render("/games", Games, { games: [] });
-  expect(html).toContain(">New game</h2>");
+  expect(html.indexOf("New game")).toBeLessThan(html.indexOf("Your games"));
   expect(html).toMatch(/<form[^>]*action="\/games" method="post"/);
   const input = html.match(/<input[^>]*id="invite-email"[^>]*>/)?.[0] ?? "";
   expect(input).toMatch(/type="email"/);
@@ -310,7 +310,7 @@ test("the game list has a New game form asking who to play", () => {
     /<label for="invite-email"[^>]*>Who do you want to play\? Enter their email\.<\/label>/,
   );
   expect(html).toMatch(
-    /<button type="submit"[^>]*class="[^"]*min-h-11[^"]*"[^>]*>Invite<\/button>/,
+    /<button type="submit"[^>]*class="[^"]*w-full[^"]*min-h-14[^"]*"[^>]*>New game<\/button>/,
   );
 });
 
