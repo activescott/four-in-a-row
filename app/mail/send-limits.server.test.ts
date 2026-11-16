@@ -82,6 +82,25 @@ test.each([
 });
 
 test.each([
+  ['"victim+1"@example.com', "victim@example.com"],
+  ['"victim+2"@example.com', "victim@example.com"],
+  ['"v.i.c.t.i.m"@gmail.com', "victim@gmail.com"],
+  ['"V.ictim+x"@Gmail.com', "victim@gmail.com"],
+])("a quoted local part of atom characters is unquoted: %s", (address, key) => {
+  expect(bucketKey(address)).toBe(key);
+});
+
+test.each([
+  ['"a b"@example.com', '"a b"@example.com'],
+  ['"a@b"@example.com', '"a@b"@example.com'],
+])(
+  "a quoted local part that needs its quotes keeps them: %s",
+  (address, key) => {
+    expect(bucketKey(address)).toBe(key);
+  },
+);
+
+test.each([
   // NFKC folds compatibility forms (fullwidth, Kelvin sign) before lowercasing.
   ["\uFF2E\uFF21\uFF2D\uFF25@example.com", "name@example.com"],
   ["\u212Aate@example.com", "kate@example.com"],
