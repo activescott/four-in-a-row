@@ -1,1 +1,7 @@
 @import "tailwindcss";
+
+@theme {
+  --font-rounded:
+    ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold",
+    "Hiragino Maru Gothic ProN", Nunito, system-ui, sans-serif;
+}
