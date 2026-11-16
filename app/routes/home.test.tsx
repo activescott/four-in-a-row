@@ -81,7 +81,7 @@ test("a signed-out visitor is told what the game is, who it is for and that ther
   expect(copy).toMatch(/phone or laptop/);
   expect(copy).toContain("Nothing to install. No password");
   expect(copy).toContain("a link or code");
-  expect(copy).toMatch(/email you when it's your turn/);
+  expect(copy).toMatch(/email you when it[’']s your turn/);
 });
 
 test("it claims nothing the app does not do", () => {
@@ -166,17 +166,13 @@ test("a signed-in visitor is sent to their games", async () => {
   expect(headers.get("location")).toBe("/games");
 });
 
-test("the home page copy is 20px, balanced, and the sign-in hint is true to /login", async () => {
-  const Stub = createRoutesStub([{ path: "/", Component: home.default }]);
-  const html = renderToString(<Stub initialEntries={["/"]} />);
+test("the home page subhead is 20px and balanced, and Sign in shows a focus ring", () => {
+  const html = renderHome();
   expect(html).toMatch(
-    /<p class="[^"]*\btext-xl\b[^"]*\btext-balance\b[^"]*">Take turns with family, from any phone or laptop\.<\/p>/,
+    /<p class="[^"]*\btext-xl\b[^"]*\btext-balance\b[^"]*">Drop discs, line up four, win\. Play with family and friends/,
   );
   expect(html).toMatch(
-    /<a [^>]*class="[^"]*\bfocus-visible:outline-3\b[^"]*\bfocus-visible:outline-offset-2\b[^"]*"[^>]*>Sign in<\/a>/,
-  );
-  expect(html).toMatch(
-    /Sign in<\/a><p class="[^"]*\btext-base\b[^"]*\btext-balance\b[^"]*">We&#x27;ll email you a link or code\. No password needed\.<\/p>/,
+    /<a [^>]*class="[^"]*\bfocus-visible:outline-3\b[^"]*\bfocus-visible:outline-offset-3\b[^"]*"[^>]*>Sign in<\/a>/,
   );
 });
 
