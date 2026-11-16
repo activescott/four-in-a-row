@@ -71,6 +71,27 @@ test.each([
   expect(bucketKey(address)).toBe(key);
 });
 
+test.each([
+  // A quoted local part may contain "+" and "."; it is not tag-stripped.
+  ['"a+b"@x.com', '"a+b"@x.com'],
+  ['"A+B"@Gmail.com', '"a+b"@gmail.com'],
+  ['"n.a"@gmail.com', '"n.a"@gmail.com'],
+])("a quoted local part is only lowercased: %s", (address, key) => {
+  expect(bucketKey(address)).toBe(key);
+});
+
+test.each([
+  // NFKC folds compatibility forms (fullwidth, Kelvin sign) before lowercasing.
+  ["\uFF2E\uFF21\uFF2D\uFF25@example.com", "name@example.com"],
+  ["\u212Aate@example.com", "kate@example.com"],
+  ["n.a.m.e@\uFF47mail.com", "name@gmail.com"],
+  // One trailing dot on the domain is the same domain.
+  ["n.a.m.e@gmail.com.", "name@gmail.com"],
+  ["name+1@Example.com.", "name@example.com"],
+])("the bucket key of %j is %s after NFKC and trailing-dot handling", (address, key) => {
+  expect(bucketKey(address)).toBe(key);
+});
+
 test("name+1@gmail.com and n.a.m.e@gmail.com share one bucket with name@gmail.com", async () => {
   const variants = [
     "name+1@gmail.com",
