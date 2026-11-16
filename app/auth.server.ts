@@ -131,7 +131,7 @@ function mapUser(user: AuthUser): AppUser {
 
 export const { handleAuth, getSession, requireAuth, optionalAuth, logout } =
   createAuthHandlers<AppUser>(auth, {
-    successRedirect: "/profile",
+    successRedirect: "/games",
     loginUrl: "/login",
     mapUser,
     // Called for every failed email verify (wrong or expired code or link).

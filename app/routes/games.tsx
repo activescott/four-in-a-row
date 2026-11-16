@@ -92,48 +92,33 @@ export default function Games({
   const navigation = useNavigation();
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-4 p-4">
-      <nav className="flex justify-end">
-        <Link
-          to="/profile"
-          className="-mx-3 inline-flex min-h-11 items-center px-3 text-sm text-slate-700 underline"
-        >
-          Profile
-        </Link>
-      </nav>
-      <h1 className="-mt-2 text-2xl font-bold text-slate-900">Your games</h1>
-
       <Form
         method="post"
         className="flex flex-col gap-2 rounded-lg border border-slate-300 bg-white p-3"
       >
-        <h2 className="text-lg font-semibold text-slate-900">New game</h2>
         <label htmlFor="invite-email" className="text-slate-700">
           Who do you want to play? Enter their email.
         </label>
-        <div className="flex gap-2">
-          <input
-            id="invite-email"
-            name="email"
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            autoCapitalize="none"
-            required
-            defaultValue={
-              actionData && "email" in actionData
-                ? String(actionData.email)
-                : ""
-            }
-            className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-400 px-3 text-lg"
-          />
-          <button
-            type="submit"
-            disabled={navigation.state === "submitting"}
-            className="min-h-11 shrink-0 rounded-lg bg-blue-700 px-4 font-medium text-white hover:bg-blue-800 disabled:opacity-60"
-          >
-            Invite
-          </button>
-        </div>
+        <input
+          id="invite-email"
+          name="email"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          autoCapitalize="none"
+          required
+          defaultValue={
+            actionData && "email" in actionData ? String(actionData.email) : ""
+          }
+          className="min-h-11 min-w-0 rounded-lg border border-slate-400 px-3 text-lg"
+        />
+        <button
+          type="submit"
+          disabled={navigation.state === "submitting"}
+          className="w-full min-h-14 rounded-lg bg-blue-700 px-4 text-xl font-bold text-white hover:bg-blue-800 disabled:opacity-60"
+        >
+          New game
+        </button>
         <p className="text-sm text-slate-600">
           We&apos;ll email them a link to join. You can move first.
         </p>
@@ -144,6 +129,8 @@ export default function Games({
           {actionData.error}
         </p>
       )}
+
+      <h1 className="text-2xl font-bold text-slate-900">Your games</h1>
 
       {games.length === 0 ? (
         <p className="text-slate-700">No games yet.</p>

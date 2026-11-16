@@ -1,62 +1,12 @@
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Page,
-} from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { confirmSignIn, newLink, waitOutFormToken } from "./helpers";
 import { inviteeEmail, inviterEmail } from "./players";
-
-type Captured = { magicLink?: string; invite?: { link: string } };
-
-// The app's e2e readback of the last email each address was sent.
-async function captured(request: APIRequestContext, email: string) {
-  const response = await request.get(
-    `/e2e/captured-email?email=${encodeURIComponent(email)}`,
-    { headers: { "x-e2e-secret": process.env.E2E_CAPTURE_SECRET! } },
-  );
-  return response.ok() ? ((await response.json()) as Captured) : {};
-}
-
-// Runs `send`, then waits for a link that wasn't in the readback before it.
-// The readback keeps the last email per address, so a send the server
-// dropped (the sign-in limit is 3 per address an hour) would otherwise hand
-// back an older, already used link.
-async function newLink(
-  request: APIRequestContext,
-  email: string,
-  pick: (mail: Captured) => string | undefined,
-  send: () => Promise<void>,
-) {
-  const before = pick(await captured(request, email));
-  await send();
-  let link: string | undefined;
-  await expect
-    .poll(async () => (link = pick(await captured(request, email))), {
-      message: `a new email to ${email}`,
-    })
-    .not.toBe(before);
-  return link!;
-}
-
-// The sign-in forms carry a signed issued-at time, and the auth library
-// refuses a submit less than 2 whole seconds after it, as a bot check.
-async function waitOutFormToken(page: Page) {
-  const token = await page.locator('input[name="authFormToken"]').inputValue();
-  const issuedAtMs = Number(token.split(".")[0]) * 1000;
-  const wait = issuedAtMs + 2_000 + 100 - Date.now();
-  if (wait > 0) await page.waitForTimeout(wait);
-}
-
-async function confirmSignIn(page: Page, magicLink: string) {
-  await page.goto(magicLink);
-  await page.getByRole("button", { name: "Confirm sign-in" }).click();
-}
 
 test("a signed-out visitor reaches the sign-in form from the home page", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "Sign in" }).click();
+  await page.getByRole("link", { name: "Sign in" }).first().click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByLabel("Email")).toBeVisible();
 });
@@ -88,10 +38,8 @@ test("A invites B by email and they play to a win, live on both boards", async (
     },
   );
   await confirmSignIn(a, linkA);
-  await expect(a).toHaveURL(/\/profile$/);
-  await a.goto("/games");
   await expect(a).toHaveURL(/\/games$/);
-  await expect(a.getByRole("button", { name: "Invite" })).toBeVisible();
+  await expect(a.getByRole("button", { name: "New game" })).toBeVisible();
 
   // A invites B and lands on the new game's board.
   await a.locator("#invite-email").fill(emailB);
@@ -99,7 +47,7 @@ test("A invites B by email and they play to a win, live on both boards", async (
     request,
     emailB,
     (m) => m.invite?.link,
-    () => a.getByRole("button", { name: "Invite" }).click(),
+    () => a.getByRole("button", { name: "New game" }).click(),
   );
   await expect(a).toHaveURL(/\/games\/[0-9a-f-]{36}$/);
   const gameUrl = a.url();

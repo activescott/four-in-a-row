@@ -19,8 +19,7 @@ afterAll(async () => {
 const { auth } = await import("../auth.server");
 const home = await import("./home");
 
-async function signedInCookie() {
-  const email = "home-test@example.com";
+async function signedInCookie(email = "home-test@example.com") {
   const user = await db.user.create({
     data: {
       email,
@@ -61,4 +60,13 @@ test("a signed-in visitor is sent to their games", async () => {
   const { status, headers } = response as Response;
   expect(status).toBe(302);
   expect(headers.get("location")).toBe("/games");
+});
+
+test("the root loader gives the header the signed-in email, or null", async () => {
+  const root = await import("../root");
+  expect(await run(root.loader, get("/"))).toEqual({ email: null });
+  const cookie = await signedInCookie("root-test@example.com");
+  expect(await run(root.loader, get("/", { cookie }))).toEqual({
+    email: "root-test@example.com",
+  });
 });
