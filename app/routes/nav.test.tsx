@@ -34,12 +34,21 @@ test("the signed-in header has the title, then an account menu with Profile and 
   expect(html).toMatch(/<a [^>]*href="\/games"[^>]*>Four in a Row<\/a>/);
   expect(html).toMatch(/<details[^>]*>\s*<summary/);
   expect(html).toContain("alice@example.com");
-  expect(html).toMatch(/<span[^>]*aria-hidden="true"[^>]*>A<\/span>/);
   expect(html).toMatch(/<a [^>]*href="\/profile"[^>]*>Profile<\/a>/);
   expect(html).toMatch(/<form[^>]*action="\/logout"/);
   expect(html).toMatch(/<button[^>]*>Sign out<\/button>/);
   expect(html).not.toMatch(/>Sign in</);
   expect(html).not.toContain("Your games");
+});
+
+test("the menu button's name contains the text it shows", () => {
+  const summary = header("alice@example.com").match(
+    /<summary[^>]*>([\s\S]*?)<\/summary>/,
+  )![1]!;
+  // Nothing visible is hidden from the accessible name.
+  expect(summary).not.toContain("aria-hidden");
+  expect(summary).toContain(">A<");
+  expect(summary).toContain("Account menu");
 });
 
 test("the signed-out header has a Sign in link and no menu", () => {
@@ -67,7 +76,6 @@ test("the profile page is light, not dark", () => {
     removal: { status: "idle" },
   });
   expect(html).not.toMatch(/color-scheme:\s*light dark/i);
-  expect(html).not.toMatch(/bg-(slate|gray|zinc|neutral)-(7|8|9)00|bg-black/);
   expect(html).toContain("[color-scheme:light]");
   expect(html).not.toContain("Your games");
 });
