@@ -47,9 +47,11 @@ export async function createInvite(
     appUrl: string;
     /** The inviter's address as the proxy saw it, for the send limits. */
     ip: string | null;
+    /** For tests: replaces the send limits' random prune draw. */
+    shouldPrune?: () => boolean;
   },
 ): Promise<InviteOutcome> {
-  const { inviterId, inviterEmail, appUrl, ip } = input;
+  const { inviterId, inviterEmail, appUrl, ip, shouldPrune } = input;
   const email = input.email.trim().toLowerCase();
   if (email.length > 254 || !EMAIL.test(email)) {
     return { ok: false, error: "invalid_email" };
@@ -104,7 +106,9 @@ export async function createInvite(
   // under the same limits. The invite keeps counting toward the pending cap.
   // That is an accepted risk: the cap of 5 bounds what a refused invite leaves.
   const allowed = (
-    await reserveSend(db, { address: email, kind: "invite", ip })
+    await reserveSend(db, { address: email, kind: "invite", ip }, logger, {
+      shouldPrune,
+    })
   ).ok;
   if (allowed) {
     const link = new URL(`/invite/${token}`, appUrl).toString();

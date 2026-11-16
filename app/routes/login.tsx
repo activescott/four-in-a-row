@@ -6,6 +6,7 @@ import {
 import { Form, redirect } from "react-router";
 import { getSession, signInLoader } from "../auth.server";
 import { passkeys } from "../passkey.client";
+import { CONTROL_BORDER } from "../controls";
 import type { Route } from "./+types/login";
 
 export function meta() {
@@ -14,13 +15,13 @@ export function meta() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const data = await signInLoader(request);
-  if (await getSession(request)) throw redirect(data.redirectTo ?? "/profile");
+  if (await getSession(request)) throw redirect(data.redirectTo ?? "/games");
   return data;
 }
 
-const input = "rounded border border-slate-300 p-2";
+const input = `min-h-11 rounded border ${CONTROL_BORDER} p-2`;
 const button =
-  "rounded bg-slate-900 px-4 py-2 font-medium text-white disabled:opacity-50";
+  "min-h-11 rounded bg-slate-900 px-4 py-2 font-medium text-white disabled:opacity-50";
 
 export default function Login({ loaderData }: Route.ComponentProps) {
   const { sent, error, redirectTo, formToken } = loaderData;
@@ -57,7 +58,7 @@ export default function Login({ loaderData }: Route.ComponentProps) {
           onChange={(event) => setEmail(event.target.value)}
           className={input}
         />
-        <p className="text-sm text-slate-600">
+        <p className="-mt-1 mb-1 text-base text-pretty text-slate-600">
           We use your email only to sign you in and send your game emails. We
           never share or sell it.
         </p>
@@ -74,9 +75,9 @@ export default function Login({ loaderData }: Route.ComponentProps) {
           className="flex flex-col gap-3"
         >
           <p role="status" className="text-green-800">
-            Check your email for a sign-in link and code. Only an address that
-            has played or been invited gets one, so if nothing arrives, ask a
-            player to invite you.
+            Check your email for a sign-in link and code. It can take a minute,
+            and it may land in spam. If nothing arrives, wait a little and ask
+            again.
           </p>
           <label htmlFor="code">Or enter the code</label>
           <input
@@ -100,7 +101,7 @@ export default function Login({ loaderData }: Route.ComponentProps) {
         </p>
       )}
 
-      <PasskeySignIn redirectTo={redirectTo ?? "/profile"} />
+      <PasskeySignIn redirectTo={redirectTo ?? "/games"} />
     </main>
   );
 }
@@ -113,11 +114,11 @@ function PasskeySignIn({ redirectTo }: { redirectTo: string }) {
         type="button"
         onClick={passkey.signIn}
         disabled={passkey.pending}
-        className="rounded border border-slate-300 px-4 py-2"
+        className={`min-h-11 rounded border ${CONTROL_BORDER} px-4 py-2`}
       >
         Sign in with a passkey
       </button>
-      <p className="text-sm text-slate-600">
+      <p className="text-base text-slate-600">
         First time? Sign in by email, then add a passkey on your profile.
       </p>
       {passkey.error && (

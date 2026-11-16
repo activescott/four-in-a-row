@@ -298,9 +298,9 @@ test("only the rows where it is your turn say so", () => {
   expect(html.match(/Their turn/g)).toHaveLength(1);
 });
 
-test("the game list has a New game form asking who to play", () => {
+test("the game list opens with a full-width New game button asking who to play", () => {
   const html = render("/games", Games, { games: [] });
-  expect(html).toContain(">New game</h2>");
+  expect(html.indexOf("New game")).toBeLessThan(html.indexOf("Your games"));
   expect(html).toMatch(/<form[^>]*action="\/games" method="post"/);
   const input = html.match(/<input[^>]*id="invite-email"[^>]*>/)?.[0] ?? "";
   expect(input).toMatch(/type="email"/);
@@ -310,7 +310,7 @@ test("the game list has a New game form asking who to play", () => {
     /<label for="invite-email"[^>]*>Who do you want to play\? Enter their email\.<\/label>/,
   );
   expect(html).toMatch(
-    /<button type="submit"[^>]*class="[^"]*min-h-11[^"]*"[^>]*>Invite<\/button>/,
+    /<button type="submit"[^>]*class="[^"]*w-full[^"]*min-h-14[^"]*"[^>]*>New game<\/button>/,
   );
 });
 
@@ -464,4 +464,32 @@ test("the sign-in page tells people what their email is used for, under the emai
   expect(html.indexOf(note)).toBeLessThan(
     html.indexOf("Email me a sign-in link"),
   );
+});
+
+test("the sign-in privacy note groups with the email field and both hints are 16px", () => {
+  const html = render("/login", Login, {
+    sent: false,
+    error: null,
+    redirectTo: null,
+    formToken: "t",
+  });
+  expect(html).toMatch(
+    /<p class="(?:[^"]* )?-mt-1\b[^"]*\bmb-1\b[^"]*\btext-base\b[^"]*">We use/,
+  );
+  expect(html).toMatch(/<p class="[^"]*\btext-base\b[^"]*">First time\?/);
+});
+
+test("the sign-in sent message doesn't say you need an invite", () => {
+  const html = text(
+    render("/login", Login, {
+      sent: true,
+      error: null,
+      redirectTo: null,
+      formToken: "t",
+    }),
+  );
+  expect(html).toContain(
+    "Check your email for a sign-in link and code. It can take a minute, and it may land in spam. If nothing arrives, wait a little and ask again.",
+  );
+  expect(html).not.toMatch(/invite|has played/i);
 });
