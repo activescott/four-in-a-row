@@ -26,8 +26,48 @@ for (const k of ["HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy"])
 env.NO_PROXY = env.no_proxy = "";
 env.NODE_USE_ENV_PROXY = "1";
 
-const child = spawn(cmd[0], cmd.slice(1), { env, stdio: "inherit" });
-const code = await new Promise((resolve) => child.on("close", resolve));
+const TIMEOUT_MS = 120_000;
+
+// Runs a command with the proxy env; resolves { code, signal, timedOut }.
+async function run(argv) {
+  // detached: own process group, so a timeout can kill npx's grandchildren too.
+  const child = spawn(argv[0], argv.slice(1), {
+    env,
+    stdio: "inherit",
+    detached: true,
+  });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    try {
+      process.kill(-child.pid, "SIGKILL");
+    } catch {
+      child.kill("SIGKILL");
+    }
+  }, TIMEOUT_MS);
+  const result = await new Promise((resolve) =>
+    child.on("close", (code, signal) => resolve({ code, signal })),
+  );
+  clearTimeout(timer);
+  return { ...result, timedOut };
+}
+
+// Canary: a request that must reach the proxy. If a Node change makes it ignore
+// NODE_USE_ENV_PROXY, the check would pass vacuously, so fail instead.
+const CANARY_HOST = "canary.invalid";
+await run([
+  process.execPath,
+  "-e",
+  `fetch("https://${CANARY_HOST}/").catch(() => {})`,
+]);
+if (!hosts.some((h) => h.includes(CANARY_HOST))) {
+  console.error(
+    "FAIL: canary request did not go through the proxy; NODE_USE_ENV_PROXY may no longer be honored, so this check cannot detect anything",
+  );
+  process.exit(1);
+}
+
+const { code, signal, timedOut } = await run(cmd);
 // Give a detached child a moment to finish a late request.
 await new Promise((resolve) => setTimeout(resolve, 1000));
 proxy.close();
@@ -40,8 +80,18 @@ if (hosts.some((h) => /checkpoint\.prisma\.io/.test(h))) {
   console.error(`FAIL: \`${cmd.join(" ")}\` contacted checkpoint.prisma.io`);
   process.exit(1);
 }
+if (timedOut) {
+  console.error(
+    `FAIL: \`${cmd.join(" ")}\` timed out after ${TIMEOUT_MS / 1000}s and was killed`,
+  );
+  process.exit(1);
+}
+if (signal) {
+  console.error(`FAIL: \`${cmd.join(" ")}\` was killed by ${signal}`);
+  process.exit(1);
+}
 if (code !== 0) {
   console.error(`FAIL: \`${cmd.join(" ")}\` exited ${code}`);
-  process.exit(code ?? 1);
+  process.exit(code);
 }
 console.log("ok: checkpoint.prisma.io was not contacted");
