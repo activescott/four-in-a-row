@@ -2,6 +2,7 @@ import { NodemailerTransport } from "@activescott/auth-provider-email";
 import type { SendMailOptions } from "nodemailer";
 import { afterAll, expect, test, vi } from "vitest";
 import type { PrismaClient } from "../generated/prisma/client";
+import { SEND_LIMITS } from "../mail/send-limits.server";
 import { createPgliteDb } from "../pglite.server";
 import { CookieJar } from "../test/cookie-jar";
 import { formPost, get, run } from "../test/routes";
@@ -257,7 +258,10 @@ test("a capped address gets the same answer as one that is sent mail, and no mai
   );
   const capped = "capped-address@example.com";
   await db.emailSend.createMany({
-    data: [1, 2, 3].map(() => ({ address: capped, kind: "signin" })),
+    data: Array.from({ length: SEND_LIMITS.signInPerAddressPerHour }, () => ({
+      address: capped,
+      kind: "signin",
+    })),
   });
 
   const refused = await requestEmail(new CookieJar(), capped, "/profile");

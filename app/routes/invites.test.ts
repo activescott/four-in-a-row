@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { PrismaClient } from "../generated/prisma/client";
+import { SEND_LIMITS } from "../mail/send-limits.server";
 import { createPgliteDb } from "../pglite.server";
 import { CookieJar } from "../test/cookie-jar";
 import { formPost, get, logCapture, run } from "../test/routes";
@@ -492,7 +493,10 @@ test("an invite the send limits refuse gets the same response as one that is sen
   const cappedIp = address("capped-ip");
   await db.emailSend.createMany({
     data: [
-      ...[1, 2, 3].map(() => ({ address: cappedAddress, kind: "turn" })),
+      ...Array.from({ length: SEND_LIMITS.invitePerAddressPerDay }, () => ({
+        address: cappedAddress,
+        kind: "invite",
+      })),
       ...Array.from({ length: 10 }, (_, n) => ({
         address: `earlier-${n}-${seq}@example.com`,
         kind: "signin",

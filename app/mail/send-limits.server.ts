@@ -15,6 +15,12 @@ export const SEND_LIMITS = {
   ipPerDay: 10,
   /** Sign-in and invite mail to addresses without an account, site-wide. */
   globalPerDay: 100,
+  // Per-kind limits (#59 review). Not used yet: the next commit switches to them.
+  signInPerAddressPerHour: 5,
+  signInPerAddressPerDay: 10,
+  invitePerAddressPerDay: 2,
+  turnPerAddressPerHour: 10,
+  signInPerIpPerHour: 30,
   /** Rows older than this are deleted on write. */
   retainMs: 2 * 24 * 60 * 60 * 1000,
 } as const;
