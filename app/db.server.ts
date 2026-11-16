@@ -2,6 +2,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { startDbSizeLogging } from "./db-size.server";
 import { PrismaClient } from "./generated/prisma/client";
 import { logger } from "./logger.server";
+import { startEmailSendPruning } from "./mail/send-limits.server";
 
 // Postgres when DATABASE_URL is set (production); otherwise PGlite, which is a
 // devDependency and so only imported here.
@@ -21,7 +22,10 @@ export function getDb() {
 // The server build imports this module at startup, so db.size is logged then.
 if (!process.env.VITEST) {
   getDb().then(
-    (client) => startDbSizeLogging(client, logger),
+    (client) => {
+      startDbSizeLogging(client, logger);
+      startEmailSendPruning(client, logger);
+    },
     (err) => logger.error({ event: "db.init.failed", err }),
   );
 }

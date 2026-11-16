@@ -196,6 +196,7 @@ test("no your-turn email once the address has had 10 turn mails this hour, and e
   await db.emailSend.createMany({
     data: Array.from({ length: SEND_LIMITS.turnPerAddressPerHour }, () => ({
       address: two.email,
+      bucket: two.email,
       kind: "turn",
     })),
   });
@@ -215,11 +216,13 @@ test("sign-in and invite mail don't use up the turn quota, and turn mail has its
     data: [
       ...Array.from({ length: 6 }, () => ({
         address: two.email,
+        bucket: two.email,
         kind: "signin",
         ip: "198.51.100.9",
       })),
       ...Array.from({ length: 3 }, () => ({
         address: two.email,
+        bucket: two.email,
         kind: "invite",
         ip: "198.51.100.9",
       })),
@@ -265,6 +268,7 @@ test("the IP and site-wide caps don't stop a your-turn email", async () => {
   await db.emailSend.createMany({
     data: Array.from({ length: 100 }, (_, n) => ({
       address: `turn-site-${n}-${seq}@example.com`,
+      bucket: `turn-site-${n}-${seq}@example.com`,
       kind: "signin",
       ip: "203.0.113.90",
     })),
