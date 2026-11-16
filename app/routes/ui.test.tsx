@@ -474,7 +474,7 @@ test("the sign-in privacy note groups with the email field and both hints are 16
     formToken: "t",
   });
   expect(html).toMatch(
-    /<p class="[^"]*\b-mt-1\b[^"]*\bmb-1\b[^"]*\btext-base\b[^"]*">We use/,
+    /<p class="(?:[^"]* )?-mt-1\b[^"]*\bmb-1\b[^"]*\btext-base\b[^"]*">We use/,
   );
   expect(html).toMatch(/<p class="[^"]*\btext-base\b[^"]*">First time\?/);
 });

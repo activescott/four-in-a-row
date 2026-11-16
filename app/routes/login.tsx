@@ -57,7 +57,7 @@ export default function Login({ loaderData }: Route.ComponentProps) {
           onChange={(event) => setEmail(event.target.value)}
           className={input}
         />
-        <p className="text-sm text-slate-600">
+        <p className="-mt-1 mb-1 text-base text-slate-600">
           We use your email only to sign you in and send your game emails. We
           never share or sell it.
         </p>
@@ -117,7 +117,7 @@ function PasskeySignIn({ redirectTo }: { redirectTo: string }) {
       >
         Sign in with a passkey
       </button>
-      <p className="text-sm text-slate-600">
+      <p className="text-base text-slate-600">
         First time? Sign in by email, then add a passkey on your profile.
       </p>
       {passkey.error && (
