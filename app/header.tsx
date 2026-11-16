@@ -5,18 +5,34 @@ const item =
   "flex min-h-11 w-full items-center rounded-lg px-3 text-left text-base text-slate-900 hover:bg-amber-100";
 
 // A native <details> works by tap and by keyboard (Enter or Space on the
-// summary); it only needs Escape and a close after navigating, added here.
+// summary); it only needs the closes added here: Escape, a tap or click
+// outside, focus moving out, and a navigation.
 function AccountMenu({ email }: { email: string }) {
   const menu = useRef<HTMLDetailsElement>(null);
-  const { pathname } = useLocation();
+  const { key } = useLocation();
   useEffect(() => {
     if (menu.current) menu.current.open = false;
-  }, [pathname]);
+  }, [key]);
+  useEffect(() => {
+    const close = (event: Event) => {
+      if (menu.current && !menu.current.contains(event.target as Node)) {
+        menu.current.open = false;
+      }
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, []);
 
   return (
     <details
       ref={menu}
       className="relative"
+      onBlur={(event) => {
+        const to = event.relatedTarget as Node | null;
+        if (to && !event.currentTarget.contains(to)) {
+          event.currentTarget.open = false;
+        }
+      }}
       onKeyDown={(event) => {
         if (event.key !== "Escape" || !menu.current?.open) return;
         menu.current.open = false;
@@ -24,17 +40,11 @@ function AccountMenu({ email }: { email: string }) {
       }}
     >
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-1 [&::-webkit-details-marker]:hidden">
-        <span className="sr-only">Account menu for {email}</span>
-        <span
-          aria-hidden="true"
-          className="flex size-9 items-center justify-center rounded-full bg-blue-700 text-lg font-semibold text-white"
-        >
+        <span className="sr-only">Account menu</span>
+        <span className="flex size-9 items-center justify-center rounded-full bg-blue-700 text-lg font-semibold text-white">
           {email.charAt(0).toUpperCase()}
         </span>
-        <span
-          aria-hidden="true"
-          className="hidden max-w-[12rem] truncate text-slate-700 sm:inline"
-        >
+        <span className="hidden max-w-[12rem] truncate text-slate-700 sm:inline">
           {email}
         </span>
       </summary>
