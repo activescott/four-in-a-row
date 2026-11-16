@@ -56,7 +56,7 @@ test("a signed-out visitor reaches the sign-in form from the home page", async (
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "Sign in" }).click();
+  await page.getByRole("link", { name: "Sign in" }).first().click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByLabel("Email")).toBeVisible();
 });
@@ -88,10 +88,8 @@ test("A invites B by email and they play to a win, live on both boards", async (
     },
   );
   await confirmSignIn(a, linkA);
-  await expect(a).toHaveURL(/\/profile$/);
-  await a.goto("/games");
   await expect(a).toHaveURL(/\/games$/);
-  await expect(a.getByRole("button", { name: "Invite" })).toBeVisible();
+  await expect(a.getByRole("button", { name: "New game" })).toBeVisible();
 
   // A invites B and lands on the new game's board.
   await a.locator("#invite-email").fill(emailB);
@@ -99,7 +97,7 @@ test("A invites B by email and they play to a win, live on both boards", async (
     request,
     emailB,
     (m) => m.invite?.link,
-    () => a.getByRole("button", { name: "Invite" }).click(),
+    () => a.getByRole("button", { name: "New game" }).click(),
   );
   await expect(a).toHaveURL(/\/games\/[0-9a-f-]{36}$/);
   const gameUrl = a.url();

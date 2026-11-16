@@ -62,3 +62,11 @@ test("a signed-in visitor is sent to their games", async () => {
   expect(status).toBe(302);
   expect(headers.get("location")).toBe("/games");
 });
+
+test("the root loader gives the header the signed-in email, or null", async () => {
+  const root = await import("../root");
+  expect(await run(root.loader, get("/"))).toEqual({ email: null });
+  expect(
+    await run(root.loader, get("/", { cookie: await signedInCookie() })),
+  ).toEqual({ email: "home-test@example.com" });
+});
