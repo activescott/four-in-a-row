@@ -163,22 +163,23 @@ test("the board uses the theme colours, red reaches 3:1 and holes show against t
   expect(html).toMatch(
     /<path[^>]*fill-rule="evenodd"[^>]*style="fill:var\(--color-blue-950\)"/,
   );
-  expect(html).toContain("fill:var(--color-blue-700)");
+  expect(html).toContain("fill:var(--color-amber-50)");
+  expect(html).not.toContain("fill:var(--color-blue-700)");
   expect(contrast("red-600", "blue-950")).toBeGreaterThanOrEqual(3);
   expect(contrast("amber-400", "blue-950")).toBeGreaterThanOrEqual(3);
-  // Was 1.21:1 with the old #0f172a hole.
-  expect(contrast("blue-700", "blue-950")).toBeGreaterThanOrEqual(2);
+  // Empty holes are cream, so they read as empty slots and not as a third
+  // colour of piece. Against the face (was 1.21:1 with #0f172a, 2.16:1 with
+  // blue-700, where red on the hole was only 1.43:1).
+  expect(contrast("amber-50", "blue-950")).toBeGreaterThanOrEqual(10);
+  expect(contrast("red-600", "amber-50")).toBeGreaterThanOrEqual(4.5);
 });
 
-test("the decorative circles are hidden on phones", () => {
+test("there are no decorative circles behind the board", () => {
   const html = renderHome();
   expect(html).not.toContain("overflow-x-clip");
-  for (const c of ["bg-amber-200", "bg-red-100"])
-    expect(html).toMatch(
-      new RegExp(
-        `<div[^>]*class="(?=[^"]*\\bhidden\\b)(?=[^"]*\\bmd:block\\b)[^"]*\\b${c}\\b`,
-      ),
-    );
+  expect(html).not.toMatch(/<div[^>]*aria-hidden="true"/);
+  expect(html).not.toContain("bg-amber-200");
+  expect(html).not.toContain("bg-red-100");
 });
 
 test("the old ?concept switch is gone", () => {

@@ -74,14 +74,6 @@ export default function Home() {
         </div>
 
         <div className="relative mx-auto w-full max-w-md px-2 pb-3 md:max-w-none">
-          <div
-            aria-hidden="true"
-            className="absolute top-0 right-0 hidden rounded-full bg-amber-200 md:block md:size-56"
-          />
-          <div
-            aria-hidden="true"
-            className="absolute bottom-0 left-0 hidden rounded-full bg-red-100 md:block md:size-44"
-          />
           <Board className="relative w-full -rotate-2 drop-shadow-[6px_8px_0_#0f172a]" />
         </div>
       </section>

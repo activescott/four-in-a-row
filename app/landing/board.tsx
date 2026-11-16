@@ -29,7 +29,9 @@ const COLOUR = {
   Y: "var(--color-amber-400)",
 } as const;
 const FACE = "var(--color-blue-950)";
-const HOLE = "var(--color-blue-700)"; // 2.16:1 against the face, so the grid reads
+// Empty holes are the page cream, so they read as empty slots (as on a real
+// board) and not as a third colour of piece.
+const HOLE = "var(--color-amber-50)";
 
 function facePath() {
   const r = 28;
