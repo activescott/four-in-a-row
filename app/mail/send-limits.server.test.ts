@@ -216,6 +216,8 @@ test("the 25th sign-in request in a day to name+N@x, across tags and IPs, sends 
 });
 
 test("a send over the daily cap does the same database work as one under it", async () => {
+  // Pin the 1-in-20 prune, which would add a statement to one side only.
+  vi.spyOn(Math, "random").mockReturnValue(0.99);
   const calls = async (address: string) => {
     const recorded = recordDbCalls(db);
     await reserveSend(

@@ -169,10 +169,10 @@ export function serveAuth(request: Request) {
 export const { signInLoader, profileAuthLoader } = createAuthPageLoaders(auth, {
   listPasskeys,
   // The library's text is "wait and try again", which is wrong for a code
-  // refused after its 3 tries: only a new code helps. Also shown for its own
-  // per-address and per-client limits, so it says both.
+  // refused after its 3 tries: only a new code helps. With no
+  // `abuse.respondWith`, RATE_LIMITED reaches the page only on a 4th try at a
+  // code; the per-address and per-client limits answer as if sent.
   errorMessages: {
-    RATE_LIMITED:
-      "Too many attempts. Ask for a new code, or wait a while and try again.",
+    RATE_LIMITED: "Too many tries with that code. Ask for a new one.",
   },
 });
