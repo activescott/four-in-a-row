@@ -3,6 +3,7 @@ import { createRoutesStub } from "react-router";
 import { afterAll, expect, test, vi } from "vitest";
 import type { PrismaClient } from "../generated/prisma/client";
 import { createPgliteDb } from "../pglite.server";
+import { classSet, openTag } from "../test/html";
 import { get, run } from "../test/routes";
 
 const { getDb } = vi.hoisted(() => ({
@@ -65,14 +66,19 @@ test("a signed-in visitor is sent to their games", async () => {
 test("the home page copy is 20px, balanced, and the sign-in hint is true to /login", async () => {
   const Stub = createRoutesStub([{ path: "/", Component: home.default }]);
   const html = renderToString(<Stub initialEntries={["/"]} />);
-  expect(html).toMatch(
-    /<p class="[^"]*\btext-xl\b[^"]*\btext-balance\b[^"]*">Take turns with family, from any phone or laptop\.<\/p>/,
-  );
-  expect(html).toMatch(
-    /<a [^>]*class="[^"]*\bfocus-visible:outline-3\b[^"]*\bfocus-visible:outline-offset-2\b[^"]*"[^>]*>Sign in<\/a>/,
-  );
-  expect(html).toMatch(
-    /Sign in<\/a><p class="[^"]*\btext-base\b[^"]*\btext-balance\b[^"]*">We&#x27;ll email you a link or code\. No password needed\.<\/p>/,
+  const copy = classSet(openTag(html, "Take turns with family"));
+  expect(copy).toContain("text-xl");
+  expect(copy).toContain("text-balance");
+  const signIn = classSet(openTag(html, "Sign in</a>"));
+  expect(signIn).toContain("focus-visible:outline-3");
+  expect(signIn).toContain("focus-visible:outline-offset-2");
+  const hintTag = openTag(html, "We&#x27;ll email you a link or code.");
+  const hint = classSet(hintTag);
+  expect(hint).toContain("text-base");
+  expect(hint).toContain("text-balance");
+  // The hint sits right under the button.
+  expect(html).toContain(
+    `Sign in</a>${hintTag}We&#x27;ll email you a link or code. No password needed.</p>`,
   );
 });
 
