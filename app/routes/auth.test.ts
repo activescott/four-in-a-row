@@ -379,6 +379,51 @@ test("a fresh cf-connecting-ip on each request does not escape the per-IP limit"
   ]);
 });
 
+// Each request comes from its own client IP, so only the library's
+// per-address limit can refuse them.
+async function requestEmailFrom(email: string, ip: string) {
+  const request = formPost("/auth/email/initiate", { email });
+  request.headers.set("x-forwarded-for", ip);
+  return auth(request);
+}
+
+const identifierBlocks = () =>
+  events("auth.initiate.blocked").filter(
+    (e) => e.reason === "identifier_rate_limited",
+  );
+
+test("the library refuses the 7th request for an address in an hour, not the 4th", async () => {
+  const email = await member("hourly-cap@example.com");
+  const before = identifierBlocks().length;
+
+  for (const n of [1, 2, 3, 4, 5, 6, 7]) {
+    await requestEmailFrom(email, `198.51.100.${n}`);
+  }
+
+  expect(identifierBlocks().slice(before)).toEqual([
+    expect.objectContaining({ rule: { windowSeconds: 3600, max: 6 } }),
+  ]);
+});
+
+test("an address that already had 10 requests today is served in the next hour's window", async () => {
+  const email = await member("daily-uncapped@example.com");
+  const before = identifierBlocks().length;
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    // 12 requests over 4 hours, 3 an hour: past the library's old 10-a-day.
+    for (const hour of [0, 1, 2, 3]) {
+      vi.setSystemTime(Date.now() + (hour ? 3601_000 : 0));
+      for (const n of [1, 2, 3]) {
+        await requestEmailFrom(email, `192.0.2.${hour * 10 + n}`);
+      }
+    }
+  } finally {
+    vi.useRealTimers();
+  }
+
+  expect(identifierBlocks().slice(before)).toEqual([]);
+});
+
 test("an existing account can sign in again", async () => {
   const { response } = await signIn(await member("member@example.com"));
 
