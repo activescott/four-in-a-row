@@ -424,6 +424,67 @@ test("an address that already had 10 requests today is served in the next hour's
   expect(identifierBlocks().slice(before)).toEqual([]);
 });
 
+test("the library refuses the 25th request for an address in a day across IPs", async () => {
+  const email = await member("daily-cap@example.com");
+  const before = identifierBlocks().length;
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    // 6 an hour, so 4 hours' worth uses the day's 24 from 24 different IPs.
+    for (let n = 1; n <= 25; n++) {
+      if (n > 1 && (n - 1) % 6 === 0) vi.setSystemTime(Date.now() + 3601_000);
+      await requestEmailFrom(email, `198.18.0.${n}`);
+    }
+  } finally {
+    vi.useRealTimers();
+  }
+
+  expect(identifierBlocks().slice(before)).toEqual([
+    expect.objectContaining({ rule: { windowSeconds: 86400, max: 24 } }),
+  ]);
+});
+
+test("24 requests for an address spread through a day are all allowed", async () => {
+  const email = await member("daily-spread@example.com");
+  const before = identifierBlocks().length;
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    for (let n = 1; n <= 24; n++) {
+      if (n > 1) vi.setSystemTime(Date.now() + 3601_000);
+      await requestEmailFrom(email, `198.19.0.${n}`);
+    }
+  } finally {
+    vi.useRealTimers();
+  }
+
+  expect(identifierBlocks().slice(before)).toEqual([]);
+});
+
+test("a 4th attempt on one code is refused, even with the right code", async () => {
+  const email = await member("guess-cap@example.com");
+  const jar = new CookieJar();
+  await requestEmail(jar, email);
+  const { code } = await (await readCapturedEmail(email)).json();
+  const wrong = code === "000000" ? "111111" : "000000";
+  const verify = async (attempt: string) =>
+    auth(
+      formPost(
+        "/auth/email/verify",
+        { code: attempt },
+        { cookie: jar.header(), referer: "/login" },
+      ),
+    );
+
+  for (const n of [1, 2, 3]) {
+    expect((await verify(wrong)).headers.get("location")).toMatch(
+      /error=INVALID_CREDENTIALS/,
+    );
+  }
+  const fourth = await verify(code);
+
+  expect(fourth.headers.get("location")).toMatch(/error=RATE_LIMITED/);
+  expect(fourth.headers.get("set-cookie") ?? "").not.toMatch(/^session=/m);
+});
+
 test("an existing account can sign in again", async () => {
   const { response } = await signIn(await member("member@example.com"));
 
