@@ -29,13 +29,14 @@ afterEach(async () => {
 });
 
 // Pruning runs on about 1 in 20 sends. Tests that compare the work two sends
-// did pin the draw, so both prune or neither does.
+// did inject `shouldPrune`, so both prune or neither does. The tests of the
+// draw itself pin Math.random.
 const draw = (value: number) => vi.spyOn(Math, "random").mockReturnValue(value);
 
-function gate(via: PrismaClient = db) {
+function gate(via: PrismaClient = db, shouldPrune?: () => boolean) {
   const capture = logCapture();
   const logger = createLogger(capture.destination);
-  const signup = createSignupGate({ db: via, logger });
+  const signup = createSignupGate({ db: via, logger, shouldPrune });
   const inner = {
     sendMagicLink: vi.fn<EmailTransport["sendMagicLink"]>(async () => true),
   };
@@ -462,10 +463,10 @@ test("a refused send is answered like a sent one", async () => {
 
 // The account lookup and the IP and site-wide caps would otherwise show up
 // as a difference in how long a request takes (#43).
-test.each([0, 0.99])(
-  "sent, refused and capped sign-ins make the same DB calls (prune draw %s)",
-  async (value) => {
-    draw(value);
+test.each([true, false])(
+  "sent, refused and capped sign-ins make the same DB calls (prune: %s)",
+  async (prune) => {
+    const shouldPrune = () => prune;
     await db.emailSend.deleteMany();
     await db.user.createMany({
       skipDuplicates: true,
@@ -519,7 +520,7 @@ test.each([0, 0.99])(
     const perCase: Record<string, string[]> = {};
     for (const [name, [email, ip]] of Object.entries(cases)) {
       const recorded = recordDbCalls(db);
-      await signInMail(gate(recorded.db), email, ip);
+      await signInMail(gate(recorded.db, shouldPrune), email, ip);
       perCase[name] = recorded.calls;
     }
     // Fill the site-wide cap, then one more stranger.
@@ -529,7 +530,7 @@ test.each([0, 0.99])(
     });
     const recorded = recordDbCalls(db);
     await signInMail(
-      gate(recorded.db),
+      gate(recorded.db, shouldPrune),
       "calls-stranger-3@example.com",
       "203.0.113.33",
     );
