@@ -13,7 +13,8 @@
     "typecheck": "react-router typegen && tsc",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:no-checkpoint": "node scripts/check-no-checkpoint.mjs"
   },
   "dependencies": {
     "@activescott/auth": "^6.0.0",

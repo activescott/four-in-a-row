@@ -1,3 +1,7 @@
+// Stop the Prisma CLI calling checkpoint.prisma.io (telemetry and version check).
+// Every CLI command loads this file, so this covers direct `npx prisma` calls too.
+process.env.CHECKPOINT_DISABLE ??= "1";
+
 import { defineConfig } from "prisma/config";
 
 export default defineConfig({

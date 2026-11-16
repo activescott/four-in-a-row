@@ -59,6 +59,7 @@ function invite(
   email: string,
   via: PrismaClient = db,
   ip: string | null = `198.51.100.${++seq % 250}`,
+  shouldPrune?: () => boolean,
 ) {
   return createInvite(via, mailer, {
     inviterId: inviter.id,
@@ -66,6 +67,7 @@ function invite(
     email,
     appUrl: APP_URL,
     ip,
+    shouldPrune,
   });
 }
 
@@ -216,10 +218,24 @@ test("inviting an address with an account and one without looks the same, and do
   const member = await user("member");
   const stranger = address("stranger");
 
+  // The prune is a random extra statement; leave it out of the comparison.
+  const never = () => false;
   const recorded = recordDbCalls(db);
-  const forMember = await invite(alice, member.email, recorded.db);
+  const forMember = await invite(
+    alice,
+    member.email,
+    recorded.db,
+    undefined,
+    never,
+  );
   const memberCalls = recorded.calls.splice(0);
-  const forStranger = await invite(alice, stranger, recorded.db);
+  const forStranger = await invite(
+    alice,
+    stranger,
+    recorded.db,
+    undefined,
+    never,
+  );
 
   // The send limits look the address up (an account is exempt from the IP
   // and site-wide caps), for every address alike.
@@ -565,10 +581,10 @@ test("sign-in and turn mail don't use up an address's invite quota, and invites 
 // An invite is answered the same however the send limits decide, and the
 // work it does must be the same too, or the time it takes says which addresses
 // have an account (#43).
-test.each([0, 0.99])(
-  "sent, refused and capped invites make the same DB calls (prune draw %s)",
-  async (value) => {
-    vi.spyOn(Math, "random").mockReturnValue(value);
+test.each([true, false])(
+  "sent, refused and capped invites make the same DB calls (prune: %s)",
+  async (prune) => {
+    const shouldPrune = () => prune;
     const alice = await user("alice");
     const member = await user("member");
     await db.user.update({
@@ -603,7 +619,7 @@ test.each([0, 0.99])(
     const perCase: Record<string, string[]> = {};
     for (const [name, email, ip] of cases) {
       const recorded = recordDbCalls(db);
-      await invite(alice, email, recorded.db, ip);
+      await invite(alice, email, recorded.db, ip, shouldPrune);
       perCase[name] = recorded.calls;
     }
     await db.emailSend.createMany({
@@ -615,7 +631,13 @@ test.each([0, 0.99])(
       })),
     });
     const recorded = recordDbCalls(db);
-    await invite(alice, address("by-site"), recorded.db, "203.0.113.72");
+    await invite(
+      alice,
+      address("by-site"),
+      recorded.db,
+      "203.0.113.72",
+      shouldPrune,
+    );
     perCase["refused by site cap"] = recorded.calls;
 
     expect(perCase["sent to a stranger"]).toEqual(

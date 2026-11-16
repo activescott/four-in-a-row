@@ -128,7 +128,7 @@ async function signIn(email: string, redirectTo?: string) {
   return { jar, response };
 }
 
-// Not the default successRedirect (/profile), so a dropped redirectTo fails.
+// Not the default successRedirect (/games), so a dropped redirectTo fails.
 const TARGET = "/games/abc";
 const OFF_SITE = ["https://evil.example", "//evil.example"];
 
@@ -189,7 +189,7 @@ test("the code form's action keeps redirectTo, as login.tsx builds it", async ()
 });
 
 test.each(OFF_SITE)(
-  "an off-site redirectTo %s is refused and sign-in lands on /profile",
+  "an off-site redirectTo %s is refused and sign-in lands on /games",
   async (target) => {
     const loginData = await run(
       login.loader,
@@ -202,7 +202,7 @@ test.each(OFF_SITE)(
     );
     const { jar, response } = await signIn(email, target);
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe("/profile");
+    expect(response.headers.get("location")).toBe("/games");
 
     const again = (await run(
       login.loader,
@@ -211,9 +211,31 @@ test.each(OFF_SITE)(
       }),
     )) as Response;
     expect(again.status).toBe(302);
-    expect(again.headers.get("location")).toBe("/profile");
+    expect(again.headers.get("location")).toBe("/games");
   },
 );
+
+test("email sign-in with no redirectTo lands on /games", async () => {
+  const email = await member("default-landing@example.com");
+  const { response } = await signIn(email);
+  expect(response.status).toBe(302);
+  expect(response.headers.get("location")).toBe("/games");
+});
+
+test("the code form with no redirectTo lands on /games", async () => {
+  const email = await member("default-code@example.com");
+  const jar = new CookieJar();
+  await requestEmail(jar, email);
+  const { code } = await (await readCapturedEmail(email)).json();
+  const response = await auth(
+    formPost(
+      "/auth/email/verify",
+      { code },
+      { cookie: jar.header(), referer: "/login" },
+    ),
+  );
+  expect(response.headers.get("location")).toBe("/games");
+});
 
 test("the sign-in email comes from Four in a Row, with its name in the subject once", async () => {
   const { emailConfig } = await import("../auth.server");

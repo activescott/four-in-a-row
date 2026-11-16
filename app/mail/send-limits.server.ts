@@ -94,6 +94,15 @@ type Counts = {
   site_day: number;
 };
 
+export type SendOptions = {
+  /**
+   * Whether this send also prunes. Defaults to a draw of about 1 in
+   * `pruneOneIn`. Tests that compare the work two sends do inject it, so a
+   * random prune can't add a statement to one of them (#69).
+   */
+  shouldPrune?: () => boolean;
+};
+
 /**
  * Checks a send against the limits and, if it is under them, keeps its
  * record, in one transaction.
@@ -123,6 +132,9 @@ export async function reserveSend(
   db: PrismaClient,
   { address, kind, ip }: { address: string; kind: MailKind; ip: string | null },
   logger: Logger = appLogger,
+  {
+    shouldPrune = () => Math.random() < 1 / SEND_LIMITS.pruneOneIn,
+  }: SendOptions = {},
 ): Promise<SendVerdict> {
   const to = address.toLowerCase();
   const bucket = bucketKey(address);
@@ -143,7 +155,7 @@ export async function reserveSend(
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('email_sends:site', 0))`;
         }
         const now = Date.now();
-        if (Math.random() < 1 / SEND_LIMITS.pruneOneIn) {
+        if (shouldPrune()) {
           await pruneEmailSends(tx, now);
         }
 

@@ -3,6 +3,7 @@ import { createRoutesStub } from "react-router";
 import { afterAll, expect, test, vi } from "vitest";
 import type { PrismaClient } from "../generated/prisma/client";
 import { createPgliteDb } from "../pglite.server";
+import { classSet, openTag } from "../test/html";
 import { get, run } from "../test/routes";
 
 const { getDb } = vi.hoisted(() => ({
@@ -19,8 +20,7 @@ afterAll(async () => {
 const { auth } = await import("../auth.server");
 const home = await import("./home");
 
-async function signedInCookie() {
-  const email = "home-test@example.com";
+async function signedInCookie(email = "home-test@example.com") {
   const user = await db.user.create({
     data: {
       email,
@@ -61,4 +61,32 @@ test("a signed-in visitor is sent to their games", async () => {
   const { status, headers } = response as Response;
   expect(status).toBe(302);
   expect(headers.get("location")).toBe("/games");
+});
+
+test("the home page copy is 20px, balanced, and the sign-in hint is true to /login", async () => {
+  const Stub = createRoutesStub([{ path: "/", Component: home.default }]);
+  const html = renderToString(<Stub initialEntries={["/"]} />);
+  const copy = classSet(openTag(html, "Take turns with family"));
+  expect(copy).toContain("text-xl");
+  expect(copy).toContain("text-balance");
+  const signIn = classSet(openTag(html, "Sign in</a>"));
+  expect(signIn).toContain("focus-visible:outline-3");
+  expect(signIn).toContain("focus-visible:outline-offset-2");
+  const hintTag = openTag(html, "We&#x27;ll email you a link or code.");
+  const hint = classSet(hintTag);
+  expect(hint).toContain("text-base");
+  expect(hint).toContain("text-balance");
+  // The hint sits right under the button.
+  expect(html).toContain(
+    `Sign in</a>${hintTag}We&#x27;ll email you a link or code. No password needed.</p>`,
+  );
+});
+
+test("the root loader gives the header the signed-in email, or null", async () => {
+  const root = await import("../root");
+  expect(await run(root.loader, get("/"))).toEqual({ email: null });
+  const cookie = await signedInCookie("root-test@example.com");
+  expect(await run(root.loader, get("/", { cookie }))).toEqual({
+    email: "root-test@example.com",
+  });
 });
