@@ -46,26 +46,36 @@ export async function confirmSignIn(page: Page, magicLink: string) {
   await page.getByRole("button", { name: "Confirm sign-in" }).click();
 }
 
-// Signs `email` in through the emailed link and lands on /games.
+// Signs `email` in through the emailed link and lands on /games. Each browser
+// project shares one per-IP send limit (3 a minute), which the other specs
+// may have used up, so a dropped send waits out the window and tries again.
 export async function signIn(
   page: Page,
   request: APIRequestContext,
   email: string,
 ) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await waitOutFormToken(page);
-  const link = await newLink(
-    request,
-    email,
-    (m) => m.magicLink,
-    async () => {
-      await page
-        .getByRole("button", { name: "Email me a sign-in link" })
-        .click();
-      await expect(page.getByText("Check your email")).toBeVisible();
-    },
-  );
-  await confirmSignIn(page, link);
-  await expect(page).toHaveURL(/\/games$/);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await page.goto("/login");
+      await page.getByLabel("Email").fill(email);
+      await waitOutFormToken(page);
+      const link = await newLink(
+        request,
+        email,
+        (m) => m.magicLink,
+        async () => {
+          await page
+            .getByRole("button", { name: "Email me a sign-in link" })
+            .click();
+          await expect(page.getByText("Check your email")).toBeVisible();
+        },
+      );
+      await confirmSignIn(page, link);
+      await expect(page).toHaveURL(/\/games$/);
+      return;
+    } catch (error) {
+      if (attempt === 3) throw error;
+      await page.waitForTimeout(30_000);
+    }
+  }
 }

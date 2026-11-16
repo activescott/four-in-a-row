@@ -33,6 +33,8 @@ export default defineConfig({
   testMatch: "*.spec.mts",
   forbidOnly: !!process.env.CI,
   retries: 0,
+  // One at a time: the specs of a project share its per-IP send limit.
+  workers: 1,
   timeout: 90_000,
   // Live updates poll every 1.5 s; a slow CI browser gets some headroom.
   expect: { timeout: 10_000 },
