@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { PrismaClient } from "../generated/prisma/client";
 import { logger } from "../logger.server";
 import type { Mail, Mailer } from "../mail/mailer.server";
+import { isDeliverableAddress } from "../mail/address.server";
 import { reserveSend } from "../mail/send-limits.server";
 import { inviteEmail } from "../mail/templates";
 
@@ -53,7 +54,11 @@ export async function createInvite(
 ): Promise<InviteOutcome> {
   const { inviterId, inviterEmail, appUrl, ip, shouldPrune } = input;
   const email = input.email.trim().toLowerCase();
-  if (email.length > 254 || !EMAIL.test(email)) {
+  if (
+    email.length > 254 ||
+    !EMAIL.test(email) ||
+    !isDeliverableAddress(email)
+  ) {
     return { ok: false, error: "invalid_email" };
   }
   if (email === inviterEmail.toLowerCase()) return { ok: false, error: "self" };

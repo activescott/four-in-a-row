@@ -1,7 +1,8 @@
-import type { InitiateGate } from "@activescott/auth";
+import { AuthErrors, type InitiateGate } from "@activescott/auth";
 import type { EmailTransport } from "@activescott/auth-provider-email";
 import type { PrismaClient } from "../generated/prisma/client";
 import type { Logger } from "../logger.server";
+import { isDeliverableAddress } from "../mail/address.server";
 import { reserveSend } from "../mail/send-limits.server";
 import { currentClientIp } from "./client-ip.server";
 
@@ -61,7 +62,16 @@ export function createSignupGate({
   }
 
   const gate: InitiateGate = {
-    onInitiate: () => "allow",
+    // The provider's own check lets comments and escapes through (see
+    // isDeliverableAddress); refuse them as it refuses any malformed address.
+    onInitiate: ({ identifier }) =>
+      isDeliverableAddress(identifier)
+        ? "allow"
+        : {
+            error: AuthErrors.invalidCredentials({
+              reason: "Invalid email format",
+            }),
+          },
     // Runs after an email link or code verifies and before the session is
     // created. Passkey sign-ins never reach it (see the PR's library gaps).
     async onVerified({ provider, mode, user, isNewUser }) {

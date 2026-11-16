@@ -1,6 +1,8 @@
+import { domainToASCII } from "node:url";
 import type { PrismaClient } from "../generated/prisma/client";
 import { ipKey } from "../auth/client-ip.server";
 import { type Logger, logger as appLogger } from "../logger.server";
+import { isDeliverableAddress } from "./address.server";
 import type { MailKind } from "./mailer.server";
 
 // Send limits (#58). Anyone can sign up, so the app must not become a way to
@@ -53,7 +55,8 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
 /**
- * The key an address is counted under: NFKC-normalised and lowercased, without a `+tag` in the
+ * The key an address is counted under: NFKC-normalised and lowercased, with
+ * the domain in its ASCII (punycode) form, without a `+tag` in the
  * local part, and for Gmail (googlemail.com counts as gmail.com) without dots in it, since all of those reach one
  * inbox. Only the key changes, never the address the mail goes to.
  */
@@ -69,7 +72,10 @@ export function bucketKey(address: string): string {
   else if (local.startsWith('"')) return lower;
   // "gmail.com." is the same domain as "gmail.com".
   // googlemail.com is the same inbox as gmail.com, so it shares its bucket.
-  let domain = lower.slice(at + 1).replace(/\.$/, "");
+  // The domain is keyed in its ASCII form, so bücher.de, xn--bcher-kva.de,
+  // bücher。de and a domain with a soft hyphen in it are one domain.
+  const rawDomain = lower.slice(at + 1);
+  let domain = (domainToASCII(rawDomain) || rawDomain).replace(/\.$/, "");
   if (domain === "googlemail.com") domain = "gmail.com";
   const plus = local.indexOf("+");
   if (plus > 0) local = local.slice(0, plus);
@@ -139,6 +145,19 @@ export async function reserveSend(
     shouldPrune = () => Math.random() < 1 / SEND_LIMITS.pruneOneIn,
   }: SendOptions = {},
 ): Promise<SendVerdict> {
+  if (!isDeliverableAddress(address)) {
+    // Comments and escapes would reach an inbox under a key of their own.
+    // Every sender validates first, so this is the backstop for stored
+    // addresses; nothing is recorded.
+    const verdict: SendVerdict = { ok: false, reason: "address" };
+    logger.warn({
+      event: "email.limit",
+      reason: "address",
+      kind,
+      invalid: true,
+    });
+    return verdict;
+  }
   const to = address.toLowerCase();
   const bucket = bucketKey(address);
   const key = ipKey(ip);
