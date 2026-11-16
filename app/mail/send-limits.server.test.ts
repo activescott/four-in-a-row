@@ -73,15 +73,6 @@ test.each([
 });
 
 test.each([
-  // A quoted local part may contain "+" and "."; it is not tag-stripped.
-  ['"a+b"@x.com', '"a+b"@x.com'],
-  ['"A+B"@Gmail.com', '"a+b"@gmail.com'],
-  ['"n.a"@gmail.com', '"n.a"@gmail.com'],
-])("a quoted local part is only lowercased: %s", (address, key) => {
-  expect(bucketKey(address)).toBe(key);
-});
-
-test.each([
   ['"victim+1"@example.com', "victim@example.com"],
   ['"victim+2"@example.com', "victim@example.com"],
   ['"v.i.c.t.i.m"@gmail.com', "victim@gmail.com"],

@@ -61,9 +61,12 @@ export function bucketKey(address: string): string {
   const lower = address.trim().normalize("NFKC").toLowerCase();
   const at = lower.lastIndexOf("@");
   if (at < 1) return lower;
-  // A quoted local part may legitimately contain "+" and ".": leave it be.
-  if (lower.startsWith('"')) return lower;
   let local = lower.slice(0, at);
+  // "victim+1" is the same inbox as victim+1: unquote it when nothing in it
+  // needs the quotes. Any other quoted local part is left as it is.
+  const quoted = /^"([a-z0-9!#$%&'*+/=?^_`{|}~.-]+)"$/.exec(local);
+  if (quoted) local = quoted[1]!;
+  else if (local.startsWith('"')) return lower;
   // "gmail.com." is the same domain as "gmail.com".
   const domain = lower.slice(at + 1).replace(/\.$/, "");
   const plus = local.indexOf("+");
