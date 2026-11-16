@@ -2,6 +2,7 @@ import { ProfilePage } from "@activescott/auth-adapter-react-router/profile";
 import { Link, useRevalidator } from "react-router";
 import { profileAuthLoader, requireAuth } from "../auth.server";
 import { passkeys } from "../passkey.client";
+import { CONTROL_BORDER } from "../controls";
 import type { Route } from "./+types/profile";
 
 export function meta() {
@@ -23,8 +24,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 // The other slots named here replace the library's inline styles, which use
 // system greys (3.95:1) and 24px buttons. Each sign-in method is a stacked
 // card: the column is at most 28rem, too narrow for a four-column table.
-const BUTTON =
-  "inline-block min-h-11 cursor-pointer rounded-lg border border-slate-400 bg-white px-4 text-base text-slate-900";
+const BUTTON = `inline-block min-h-11 cursor-pointer rounded-lg border ${CONTROL_BORDER} bg-white px-4 text-base text-slate-900`;
 const STACKED = [
   "block w-full",
   "[&_thead]:sr-only",
@@ -52,6 +52,14 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
   const revalidator = useRevalidator();
   return (
     <main className="mx-auto flex max-w-md flex-col gap-6 p-4">
+      <nav>
+        <Link
+          to="/games"
+          className="-mx-3 inline-flex min-h-11 items-center px-3 text-base text-blue-800 underline"
+        >
+          Your games
+        </Link>
+      </nav>
       <ProfilePage
         {...loaderData}
         passkeyClient={passkeys}

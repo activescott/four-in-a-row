@@ -100,7 +100,7 @@ test("the profile page is light, not dark", () => {
   });
   expect(html).not.toMatch(/color-scheme:\s*light dark/i);
   expect(html).toContain("[color-scheme:light]");
-  expect(html).not.toContain("Your games");
+  expect(html).toContain(">Your games</a>");
 });
 
 const profileData = {
