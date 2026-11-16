@@ -131,7 +131,8 @@ test("each sign-in method is a stacked card at every width (the column is never 
     /<button[^>]*data-testid="remove-identity"[^>]*>/,
   )![0];
   expect(remove).toMatch(/min-h-11/);
-  expect(remove).toMatch(/[\s"]w-full/);
+  // Full width inside the table only: passkeys list their Remove in a row.
+  expect(table).toMatch(/[\s"]\[&amp;_button\]:w-full/);
   // The library's inline 24px button style is replaced, not kept.
   expect(remove).not.toContain("style=");
 });

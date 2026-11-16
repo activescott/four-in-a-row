@@ -21,26 +21,25 @@ export async function loader({ request }: Route.LoaderArgs) {
 // slots replaces it, so the page stays light like the rest of the app.
 //
 // The other slots named here replace the library's inline styles, which use
-// system greys (3.95:1) and 24px buttons. Below `sm` each sign-in method is a
-// stacked card, as a four-column table does not fit a phone.
+// system greys (3.95:1) and 24px buttons. Each sign-in method is a stacked
+// card: the column is at most 28rem, too narrow for a four-column table.
 const BUTTON =
   "inline-block min-h-11 cursor-pointer rounded-lg border border-slate-400 bg-white px-4 text-base text-slate-900";
 const STACKED = [
-  "block w-full border-collapse",
-  "max-sm:[&_thead]:sr-only",
-  "max-sm:[&_tbody]:block",
-  "max-sm:[&_tr]:mb-3 max-sm:[&_tr]:flex max-sm:[&_tr]:flex-col max-sm:[&_tr]:gap-1",
-  "max-sm:[&_tr]:rounded-lg max-sm:[&_tr]:border max-sm:[&_tr]:border-slate-300 max-sm:[&_tr]:p-3",
-  "max-sm:[&_td:nth-child(3)]:before:content-['Added_']",
-  "sm:table",
+  "block w-full",
+  "[&_thead]:sr-only",
+  "[&_button]:w-full",
+  "[&_tbody]:block",
+  "[&_tr]:mb-3 [&_tr]:flex [&_tr]:flex-col [&_tr]:gap-1",
+  "[&_tr]:rounded-lg [&_tr]:border [&_tr]:border-slate-300 [&_tr]:p-3",
+  "[&_td:nth-child(3)]:before:content-['Added_']",
 ].join(" ");
 const LIGHT = {
   container: "text-slate-900 [color-scheme:light]",
   card: "mb-4 rounded-lg border border-slate-300 bg-white",
   table: STACKED,
-  th: "whitespace-nowrap border-b-2 border-slate-300 px-3 py-2 text-left font-semibold",
-  td: "border-b border-slate-200 px-3 py-2 align-top break-words max-sm:border-0 max-sm:p-0",
-  removeButton: `${BUTTON} max-sm:mt-2 max-sm:w-full`,
+  td: "break-words",
+  removeButton: `${BUTTON} mt-2`,
   addButton: BUTTON,
   definitionTerm: "text-slate-600",
   description: "mb-3 text-slate-600",
