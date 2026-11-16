@@ -100,6 +100,10 @@ export const auth = new Auth({
   abuse: {
     // The email send limits use the same client address (see clientIp).
     clientIp: { getClientIp: clientIp },
+    // perIp stays at the library default (3 a minute, 10 an hour). The
+    // library's per-address default adds 10 a day counted across every
+    // client, which lets a stranger lock the owner out for the day.
+    perIdentifier: [{ windowSeconds: 3600, max: 6 }],
     onBlocked: ({ reason, providerId, rule }) =>
       logger.warn({
         event: "auth.initiate.blocked",
