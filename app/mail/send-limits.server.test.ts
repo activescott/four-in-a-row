@@ -82,6 +82,19 @@ test.each([
 });
 
 test.each([
+  ["x@googlemail.com", "x@gmail.com"],
+  ["X@GoogleMail.com", "x@gmail.com"],
+  ["x@googlemail.com.", "x@gmail.com"],
+  ["x+1@googlemail.com", "x@gmail.com"],
+  ["x.y@googlemail.com", "xy@gmail.com"],
+  ["x.y+news@googlemail.com", "xy@gmail.com"],
+  ['"x.y+news"@googlemail.com', "xy@gmail.com"],
+])("googlemail.com shares the gmail.com bucket: %s", (address, key) => {
+  expect(bucketKey(address)).toBe(key);
+  expect(bucketKey(address)).toBe(bucketKey(key));
+});
+
+test.each([
   ['"a b"@example.com', '"a b"@example.com'],
   ['"a@b"@example.com', '"a@b"@example.com'],
 ])(
