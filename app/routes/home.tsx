@@ -21,11 +21,11 @@ export default function Home() {
       </p>
       <Link
         to="/login"
-        className="flex min-h-12 w-full items-center justify-center rounded-lg bg-blue-700 px-4 py-3 text-lg font-semibold text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+        className="flex min-h-12 w-full items-center justify-center rounded-lg bg-blue-700 px-4 py-3 text-lg font-semibold text-white hover:bg-blue-800 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
       >
         Sign in
       </Link>
-      <p className="-mt-3 text-sm text-slate-600">
+      <p className="-mt-3 text-base text-balance text-slate-600">
         We'll email you a link or code. No password needed.
       </p>
     </main>

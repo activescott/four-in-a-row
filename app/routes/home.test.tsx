@@ -70,9 +70,9 @@ test("the home page copy is 20px, balanced, and the sign-in hint is true to /log
     /<p class="[^"]*\btext-xl\b[^"]*\btext-balance\b[^"]*">Take turns with family, from any phone or laptop\.<\/p>/,
   );
   expect(html).toMatch(
-    /<a [^>]*class="[^"]*\bfocus-visible:outline-2\b[^"]*\bfocus-visible:outline-offset-2\b[^"]*"[^>]*>Sign in<\/a>/,
+    /<a [^>]*class="[^"]*\bfocus-visible:outline-3\b[^"]*\bfocus-visible:outline-offset-2\b[^"]*"[^>]*>Sign in<\/a>/,
   );
   expect(html).toMatch(
-    /Sign in<\/a><p class="[^"]*\btext-sm\b[^"]*">We&#x27;ll email you a link or code\. No password needed\.<\/p>/,
+    /Sign in<\/a><p class="[^"]*\btext-base\b[^"]*\btext-balance\b[^"]*">We&#x27;ll email you a link or code\. No password needed\.<\/p>/,
   );
 });

@@ -18,9 +18,9 @@ export async function loader({ request }: Route.LoaderArgs) {
   return data;
 }
 
-const input = "rounded border border-slate-300 p-2";
+const input = "min-h-11 rounded border border-slate-300 p-2";
 const button =
-  "rounded bg-slate-900 px-4 py-2 font-medium text-white disabled:opacity-50";
+  "min-h-11 rounded bg-slate-900 px-4 py-2 font-medium text-white disabled:opacity-50";
 
 export default function Login({ loaderData }: Route.ComponentProps) {
   const { sent, error, redirectTo, formToken } = loaderData;
@@ -57,7 +57,7 @@ export default function Login({ loaderData }: Route.ComponentProps) {
           onChange={(event) => setEmail(event.target.value)}
           className={input}
         />
-        <p className="-mt-1 mb-1 text-base text-slate-600">
+        <p className="-mt-1 mb-1 text-base text-pretty text-slate-600">
           We use your email only to sign you in and send your game emails. We
           never share or sell it.
         </p>
@@ -113,7 +113,7 @@ function PasskeySignIn({ redirectTo }: { redirectTo: string }) {
         type="button"
         onClick={passkey.signIn}
         disabled={passkey.pending}
-        className="rounded border border-slate-300 px-4 py-2"
+        className="min-h-11 rounded border border-slate-300 px-4 py-2"
       >
         Sign in with a passkey
       </button>
