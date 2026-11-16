@@ -55,7 +55,7 @@ function SignIn({ className = "" }: { className?: string }) {
 
 export default function Home() {
   return (
-    <main className="overflow-x-clip font-rounded">
+    <main className="font-rounded">
       <section className="mx-auto grid max-w-6xl items-center gap-x-12 gap-y-8 px-5 pt-6 pb-10 md:grid-cols-2 md:py-16">
         <div className="flex min-w-0 flex-col gap-4 md:gap-6">
           <h1 className="text-4xl leading-none font-extrabold tracking-tight text-balance text-slate-900 sm:text-5xl md:text-7xl">
@@ -76,11 +76,11 @@ export default function Home() {
         <div className="relative mx-auto w-full max-w-md px-2 pb-3 md:max-w-none">
           <div
             aria-hidden="true"
-            className="absolute top-0 right-0 size-32 rounded-full bg-amber-200 md:size-56"
+            className="absolute top-0 right-0 hidden rounded-full bg-amber-200 md:block md:size-56"
           />
           <div
             aria-hidden="true"
-            className="absolute bottom-0 left-0 size-24 rounded-full bg-red-100 md:size-44"
+            className="absolute bottom-0 left-0 hidden rounded-full bg-red-100 md:block md:size-44"
           />
           <Board className="relative w-full -rotate-2 drop-shadow-[6px_8px_0_#0f172a]" />
         </div>

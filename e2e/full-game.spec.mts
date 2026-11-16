@@ -24,6 +24,10 @@ test("the home page fits a 320px phone with no sideways scroll", async ({
     window.innerWidth,
   ]);
   expect(scroll).toBeLessThanOrEqual(inner);
+  const board = await page
+    .getByRole("img", { name: /Four in a Row board/ })
+    .boundingBox();
+  expect(board!.x + board!.width).toBeLessThanOrEqual(inner);
 });
 
 const name = (email: string) => email.split("@")[0]!;

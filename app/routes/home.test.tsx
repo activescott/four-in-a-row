@@ -57,15 +57,31 @@ const text = (html: string) =>
     .replace(/&#x27;/g, "'")
     .replace(/\s+/g, " ");
 
-function luminance(hex: string) {
-  const [r, g, b] = [1, 3, 5].map((i) => {
-    const v = parseInt(hex.slice(i, i + 2), 16) / 255;
-    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-  }) as [number, number, number];
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+// Tailwind v4 colours are oklch in its theme; convert a token to linear sRGB
+// luminance, as the browser shows it.
+const theme = readFileSync("node_modules/tailwindcss/theme.css", "utf8");
+function token(name: string) {
+  const m = theme.match(
+    new RegExp(`--color-${name}: oklch\\(([\\d.]+)% ([\\d.]+) ([\\d.]+)\\)`),
+  );
+  if (!m) throw new Error(`no theme colour ${name}`);
+  const L = Number(m[1]) / 100;
+  const C = Number(m[2]);
+  const h = (Number(m[3]) * Math.PI) / 180;
+  const a = C * Math.cos(h);
+  const b = C * Math.sin(h);
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const mm = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  const [r, g, bl] = [
+    4.0767416621 * l - 3.3077115913 * mm + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * mm - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * mm + 1.707614701 * s,
+  ].map((v) => Math.min(1, Math.max(0, v))) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
 }
 function contrast(a: string, b: string) {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [
+  const [hi, lo] = [token(a), token(b)].sort((x, y) => y - x) as [
     number,
     number,
   ];
@@ -140,15 +156,29 @@ test("the board is an image with an accessible label", () => {
   );
 });
 
-test("red discs reach 3:1 against the board", () => {
+test("the board uses the theme colours, red reaches 3:1 and holes show against the face", () => {
   const html = renderHome();
-  const face = html.match(
-    /<path[^>]*fill-rule="evenodd"[^>]*fill="(#[0-9a-f]{6})"/,
-  )?.[1];
-  expect(face).toBeDefined();
-  expect(html).toContain('fill="#dc2626"');
-  expect(contrast("#dc2626", face!)).toBeGreaterThanOrEqual(3);
-  expect(contrast("#fbbf24", face!)).toBeGreaterThanOrEqual(3);
+  expect(html).toContain("fill:var(--color-red-600)");
+  expect(html).toContain("fill:var(--color-amber-400)");
+  expect(html).toMatch(
+    /<path[^>]*fill-rule="evenodd"[^>]*style="fill:var\(--color-blue-950\)"/,
+  );
+  expect(html).toContain("fill:var(--color-blue-700)");
+  expect(contrast("red-600", "blue-950")).toBeGreaterThanOrEqual(3);
+  expect(contrast("amber-400", "blue-950")).toBeGreaterThanOrEqual(3);
+  // Was 1.21:1 with the old #0f172a hole.
+  expect(contrast("blue-700", "blue-950")).toBeGreaterThanOrEqual(2);
+});
+
+test("the decorative circles are hidden on phones", () => {
+  const html = renderHome();
+  expect(html).not.toContain("overflow-x-clip");
+  for (const c of ["bg-amber-200", "bg-red-100"])
+    expect(html).toMatch(
+      new RegExp(
+        `<div[^>]*class="(?=[^"]*\\bhidden\\b)(?=[^"]*\\bmd:block\\b)[^"]*\\b${c}\\b`,
+      ),
+    );
 });
 
 test("the old ?concept switch is gone", () => {

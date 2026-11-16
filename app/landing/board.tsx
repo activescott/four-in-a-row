@@ -1,6 +1,6 @@
 // A Four in a Row board drawn in SVG, in the app's own colours (navy board,
 // red-600 and amber-400 discs, as on the game page). Discs sit behind the
-// board's face so a dropped disc slides in behind it, as on a real board.
+// board's face, as on a real board.
 
 const CELL = 100;
 const PAD = 20;
@@ -22,7 +22,14 @@ const WIN: [number, number][] = [
 const cx = (c: number) => PAD + c * CELL + CELL / 2;
 const cy = (r: number) => PAD + (ROWS - 1 - r) * CELL + CELL / 2;
 
-const COLOUR = { R: "#dc2626", Y: "#fbbf24" } as const; // red-600, amber-400
+// Tailwind v4 theme tokens, so the discs match the game page. They are CSS
+// variables, so they go in `style`, not in the fill attribute.
+const COLOUR = {
+  R: "var(--color-red-600)",
+  Y: "var(--color-amber-400)",
+} as const;
+const FACE = "var(--color-blue-950)";
+const HOLE = "var(--color-blue-700)"; // 2.16:1 against the face, so the grid reads
 
 function facePath() {
   const r = 28;
@@ -48,7 +55,7 @@ export function Board({ className }: { className?: string }) {
           cx={cx(c)}
           cy={cy(r)}
           r={CELL * 0.42}
-          fill={COLOUR[p as "R" | "Y"]}
+          style={{ fill: COLOUR[p as "R" | "Y"] }}
         />,
       );
     });
@@ -60,9 +67,9 @@ export function Board({ className }: { className?: string }) {
       role="img"
       aria-label="A Four in a Row board. Red has just dropped the fourth disc of a diagonal line of four, and wins."
     >
-      <rect width={W} height={H} rx="28" fill="#0f172a" />
+      <rect width={W} height={H} rx="28" style={{ fill: HOLE }} />
       {discs}
-      <path d={facePath()} fillRule="evenodd" fill="#172554" /* blue-950 */ />
+      <path d={facePath()} fillRule="evenodd" style={{ fill: FACE }} />
       <g>
         <line
           x1={cx(1)}
@@ -79,7 +86,7 @@ export function Board({ className }: { className?: string }) {
             cx={cx(c)}
             cy={cy(r)}
             r={CELL * 0.42}
-            fill="#dc2626"
+            style={{ fill: COLOUR.R }}
             stroke="#fffbeb"
             strokeWidth="10"
           />
