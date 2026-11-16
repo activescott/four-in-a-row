@@ -48,7 +48,30 @@ test("the menu button's name contains the text it shows", () => {
   // Nothing visible is hidden from the accessible name.
   expect(summary).not.toContain("aria-hidden");
   expect(summary).toContain(">A<");
-  expect(summary).toContain("Account menu");
+  expect(summary).toContain(">Account<");
+});
+
+test("the account trigger shows the avatar, an Account label and a chevron, 44px wide", () => {
+  const summary = header("alice@example.com").match(
+    /<summary[^>]*>([\s\S]*?)<\/summary>/,
+  )![1]!;
+  expect(summary).toMatch(/size-11/);
+  expect(summary).toMatch(/<svg/);
+  // The label is shown on every width, not only from sm up.
+  expect(summary).not.toMatch(/class="hidden[^"]*"[^>]*>Account</);
+  expect(summary).not.toContain("alice@example.com");
+});
+
+test("the menu's email is wide enough not to break mid-word", () => {
+  const html = header("alice@example.com");
+  const email = html.match(/<p[^>]*>alice@example\.com<\/p>/)![0];
+  expect(email).not.toContain("break-all");
+  expect(html).toMatch(/min-w-\[16rem\][^"]*max-w-\[calc\(100vw-1rem\)\]/);
+});
+
+test("the header sits in the same container as the page content", () => {
+  const html = header("alice@example.com");
+  expect(html).toMatch(/<header[^>]*><div class="[^"]*max-w-md px-4/);
 });
 
 test("the signed-out header has a Sign in link and no menu", () => {
@@ -78,6 +101,46 @@ test("the profile page is light, not dark", () => {
   expect(html).not.toMatch(/color-scheme:\s*light dark/i);
   expect(html).toContain("[color-scheme:light]");
   expect(html).not.toContain("Your games");
+});
+
+const profileData = {
+  email: "alice@example.com",
+  memberSince: "2026-01-01T00:00:00.000Z",
+  identities: [
+    {
+      id: "i1",
+      provider: "email",
+      identifier: "alice@example.com",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    },
+  ],
+  passkeys: [],
+  linkFlow: { status: "idle" },
+  removal: { status: "idle" },
+};
+
+test("on a phone each sign-in method is a stacked card with a full-width 44px Remove", () => {
+  const html = render("/profile", Profile, profileData);
+  const table = html.match(/<table[^>]*>/)![0];
+  expect(table).toMatch(/max-sm:\[&_tr\]:flex/);
+  expect(table).toMatch(/max-sm:\[&_tr\]:flex-col/);
+  expect(table).toMatch(/max-sm:\[&_tr\]:border/);
+  const remove = html.match(
+    /<button[^>]*data-testid="remove-identity"[^>]*>/,
+  )![0];
+  expect(remove).toMatch(/min-h-11/);
+  expect(remove).toMatch(/max-sm:w-full/);
+  // The library's inline 24px button style is replaced, not kept.
+  expect(remove).not.toContain("style=");
+});
+
+test("the profile's tap targets are 44px and its grey text is slate-600", () => {
+  const html = render("/profile", Profile, profileData);
+  const add = html.match(/<button[^>]*data-testid="add-passkey"[^>]*>/)![0];
+  expect(add).toMatch(/min-h-11/);
+  expect(html).toMatch(/<dt[^>]*text-slate-600/);
+  expect(html).toMatch(/<p[^>]*text-slate-600[^>]*>[^<]*passkey/i);
+  expect(html).not.toContain("GrayText");
 });
 
 test("the passkey button defaults to /games and keeps an explicit redirectTo", () => {
