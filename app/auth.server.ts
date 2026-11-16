@@ -61,6 +61,8 @@ export const emailConfig = validateEmailConfig({
   template: {
     appName: "Four in a Row",
   },
+  // 3 tries per code, not the library's 5; see the guess budget in the README.
+  otp: { maxAttempts: 3 },
 });
 
 const db = await getDb();
@@ -101,9 +103,14 @@ export const auth = new Auth({
     // The email send limits use the same client address (see clientIp).
     clientIp: { getClientIp: clientIp },
     // perIp stays at the library default (3 a minute, 10 an hour). The
-    // library's per-address default adds 10 a day counted across every
-    // client, which lets a stranger lock the owner out for the day.
-    perIdentifier: [{ windowSeconds: 3600, max: 6 }],
+    // per-address rules count every client: 6 an hour, 24 a day. With 3 tries
+    // a code that caps guessing at 18 an hour and 72 a day per address. A
+    // stranger can use the day up (the owner then has passkeys, or waits for
+    // the window), but the library's default of 10 a day made that cheaper.
+    perIdentifier: [
+      { windowSeconds: 3600, max: 6 },
+      { windowSeconds: 86_400, max: 24 },
+    ],
     onBlocked: ({ reason, providerId, rule }) =>
       logger.warn({
         event: "auth.initiate.blocked",

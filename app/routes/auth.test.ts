@@ -474,7 +474,7 @@ test("a 4th attempt on one code is refused, even with the right code", async () 
       ),
     );
 
-  for (const n of [1, 2, 3]) {
+  for (let tries = 0; tries < 3; tries++) {
     expect((await verify(wrong)).headers.get("location")).toMatch(
       /error=INVALID_CREDENTIALS/,
     );
