@@ -495,10 +495,12 @@ test("an invite the send limits refuse gets the same response as one that is sen
     data: [
       ...Array.from({ length: SEND_LIMITS.invitePerAddressPerDay }, () => ({
         address: cappedAddress,
+        bucket: cappedAddress,
         kind: "invite",
       })),
       ...Array.from({ length: 10 }, (_, n) => ({
         address: `earlier-${n}-${seq}@example.com`,
+        bucket: `earlier-${n}-${seq}@example.com`,
         kind: "signin",
         ip: "203.0.113.60",
       })),
