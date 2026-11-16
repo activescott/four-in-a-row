@@ -6,6 +6,7 @@ import { emptyBoard } from "../game/rules";
 import Board from "./games.$id";
 import Games from "./games";
 import Invite from "./invite.$key";
+import Login from "./login";
 
 // Renders a route component the way React Router would with this loader data.
 function render(path: string, Component: unknown, loaderData: unknown) {
@@ -430,4 +431,22 @@ test("a long address in the turn line can wrap and does not push the board wider
     "margaret.<wbr/>henderson@<wbr/>example.<wbr/>com&#x27;s turn.",
   );
   expect(html).toMatch(/<span class="min-w-0 break-words">margaret/);
+});
+
+test("the sign-in page tells people what their email is used for, under the email field", () => {
+  const html = text(
+    render("/login", Login, {
+      sent: false,
+      error: null,
+      redirectTo: null,
+      formToken: "t",
+    }),
+  );
+  const note =
+    "We use your email only to sign you in and send your game emails. We never share or sell it.";
+  expect(html).toContain(note);
+  expect(html.indexOf('id="email"')).toBeLessThan(html.indexOf(note));
+  expect(html.indexOf(note)).toBeLessThan(
+    html.indexOf("Email me a sign-in link"),
+  );
 });
