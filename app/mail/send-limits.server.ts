@@ -19,6 +19,12 @@ export const SEND_LIMITS = {
    * the owner's day (#60). The hourly cap above counts every client.
    */
   signInPerAddressPerDay: 10,
+  /**
+   * Sign-in mail to one inbox (the bucket key, so every +tag and Gmail dot
+   * variant), from any client. The auth library caps each exact address, so
+   * tags would otherwise each get their own day (#76).
+   */
+  signInPerBucketPerDay: 24,
   /** Invites to one address, from anyone. */
   invitePerAddressPerDay: 2,
   /** "Your turn" mail to one address. */
@@ -82,6 +88,7 @@ type Counts = {
   address_hour: number;
   address_day: number;
   address_client_day: number;
+  bucket_day: number;
   client_signin_hour: number;
   client_day: number;
   site_day: number;
@@ -157,6 +164,8 @@ export async function reserveSend(
             AS address_day,
           (count(*) FILTER (WHERE s.bucket = ${bucket} AND s.kind = ${kind}
             AND s.ip = ${key}))::int AS address_client_day,
+          (count(*) FILTER (WHERE s.bucket = ${bucket} AND s.kind = 'signin'))::int
+            AS bucket_day,
           (count(*) FILTER (WHERE s.kind = 'signin' AND s.ip = ${key}
             AND s.created_at > ${hourSince}::timestamp))::int
             AS client_signin_hour,
@@ -219,6 +228,7 @@ function decide(
     address_hour: 0,
     address_day: 0,
     address_client_day: 0,
+    bucket_day: 0,
     client_signin_hour: 0,
     client_day: 0,
     site_day: 0,
@@ -235,7 +245,8 @@ function decide(
     kind === "invite"
       ? c.address_day >= L.invitePerAddressPerDay
       : c.address_hour >= L.signInPerAddressPerHour ||
-        c.address_client_day >= L.signInPerAddressPerDay
+        c.address_client_day >= L.signInPerAddressPerDay ||
+        c.bucket_day >= L.signInPerBucketPerDay
   ) {
     return refuse("address");
   }

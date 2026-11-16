@@ -168,4 +168,11 @@ export function serveAuth(request: Request) {
 
 export const { signInLoader, profileAuthLoader } = createAuthPageLoaders(auth, {
   listPasskeys,
+  // The library's text is "wait and try again", which is wrong for a code
+  // refused after its 3 tries: only a new code helps. Also shown for its own
+  // per-address and per-client limits, so it says both.
+  errorMessages: {
+    RATE_LIMITED:
+      "Too many attempts. Ask for a new code, or wait a while and try again.",
+  },
 });
