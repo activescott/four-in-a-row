@@ -282,6 +282,7 @@ test("a capped address gets the same answer as one that is sent mail, and no mai
   await db.emailSend.createMany({
     data: Array.from({ length: SEND_LIMITS.signInPerAddressPerHour }, () => ({
       address: capped,
+      bucket: capped,
       kind: "signin",
     })),
   });
@@ -305,6 +306,7 @@ test("an address over the IP cap gets the same answer, and no mail", async () =>
   await db.emailSend.createMany({
     data: Array.from({ length: 10 }, (_, n) => ({
       address: `ip-earlier-${n}@example.com`,
+      bucket: `ip-earlier-${n}@example.com`,
       kind: "signin",
       ip: "203.0.113.50",
     })),
@@ -333,6 +335,7 @@ test("the site-wide cap stops mail to a never-seen address and logs at error lev
   await db.emailSend.createMany({
     data: Array.from({ length: 100 }, (_, n) => ({
       address: `site-earlier-${n}@example.com`,
+      bucket: `site-earlier-${n}@example.com`,
       kind: "signin",
       ip: `192.0.2.${n}`,
     })),

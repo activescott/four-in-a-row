@@ -447,6 +447,7 @@ test("an invite to an address already invited twice today is answered ok and sen
   await db.emailSend.createMany({
     data: Array.from({ length: SEND_LIMITS.invitePerAddressPerDay }, () => ({
       address: bob,
+      bucket: bob,
       kind: "invite",
       ip: "198.51.100.1",
       createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
@@ -470,6 +471,7 @@ test("an invite from an IP that has mailed 10 addresses without an account today
   await db.emailSend.createMany({
     data: Array.from({ length: 10 }, (_, n) => ({
       address: `ip-capped-${n}-${seq}@example.com`,
+      bucket: `ip-capped-${n}-${seq}@example.com`,
       kind: "signin",
       ip: "203.0.113.80",
     })),
@@ -498,6 +500,7 @@ test("an invite once the site has mailed 100 addresses without an account today 
   await db.emailSend.createMany({
     data: Array.from({ length: 100 }, (_, n) => ({
       address: `site-capped-${n}@example.com`,
+      bucket: `site-capped-${n}@example.com`,
       kind: "invite",
       ip: `192.0.2.${n}`,
     })),
@@ -520,6 +523,7 @@ test("a refused invite still counts against the inviter's pending cap", async ()
   await db.emailSend.createMany({
     data: Array.from({ length: SEND_LIMITS.invitePerAddressPerDay }, () => ({
       address: bob,
+      bucket: bob,
       kind: "invite",
     })),
   });
@@ -538,11 +542,13 @@ test("sign-in and turn mail don't use up an address's invite quota, and invites 
     data: [
       ...Array.from({ length: SEND_LIMITS.signInPerAddressPerHour }, () => ({
         address: bob,
+        bucket: bob,
         kind: "signin",
         ip: "198.51.100.2",
       })),
       ...Array.from({ length: SEND_LIMITS.turnPerAddressPerHour }, () => ({
         address: bob,
+        bucket: bob,
         kind: "turn",
       })),
     ],
@@ -572,6 +578,7 @@ test.each([0, 0.99])(
     await db.emailSend.createMany({
       data: Array.from({ length: SEND_LIMITS.invitePerAddressPerDay }, () => ({
         address: byAddress,
+        bucket: byAddress,
         kind: "invite",
         ip: "198.51.100.3",
       })),
@@ -579,6 +586,7 @@ test.each([0, 0.99])(
     await db.emailSend.createMany({
       data: Array.from({ length: SEND_LIMITS.ipPerDay }, (_, n) => ({
         address: `calls-ip-${n}-${seq}@example.com`,
+        bucket: `calls-ip-${n}-${seq}@example.com`,
         kind: "signin",
         ip: "203.0.113.70",
       })),
@@ -599,6 +607,7 @@ test.each([0, 0.99])(
     await db.emailSend.createMany({
       data: Array.from({ length: SEND_LIMITS.globalPerDay }, (_, n) => ({
         address: `calls-site-${n}-${seq}@example.com`,
+        bucket: `calls-site-${n}-${seq}@example.com`,
         kind: "invite",
         ip: `192.0.2.${n}`,
       })),
