@@ -366,7 +366,7 @@ test("an expired invite link says so, and its page sends no sign-in email", asyn
   expect(log.capture.events("invite.expired")).toContainEqual(
     expect.objectContaining({ gameId }),
   );
-}
+});
 
 test("the invite page sends its sign-in email only to the invited address", async () => {
   const alice = await player("alice");
