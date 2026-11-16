@@ -51,13 +51,13 @@ const LIGHT = {
 export default function Profile({ loaderData }: Route.ComponentProps) {
   const revalidator = useRevalidator();
   return (
-    <main className="mx-auto flex max-w-md flex-col gap-6 p-4">
+    <main className="mx-auto flex max-w-md flex-col gap-2 p-4">
       <nav>
         <Link
           to="/games"
-          className="-mx-3 inline-flex min-h-11 items-center px-3 text-base text-blue-800 underline"
+          className="-mx-3 inline-flex min-h-11 items-center gap-1.5 px-3 text-base font-medium text-blue-800 underline"
         >
-          Your games
+          <span aria-hidden="true">←</span> Your games
         </Link>
       </nav>
       <ProfilePage

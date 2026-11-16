@@ -133,9 +133,18 @@ test("/profile: the library's Add and Remove buttons share the border", () => {
   );
 });
 
-test("/profile has a way back to Your games, at least 44px tall", () => {
+test("/profile has a way back to Your games: arrow, body size, medium weight, 44px tall, close to the heading", () => {
   const html = render("/profile", Profile, profileData);
-  const links = html.match(/<a [^>]*href="\/games"[^>]*>Your games<\/a>/g);
+  const links = html.match(
+    /<a [^>]*href="\/games"[^>]*><span aria-hidden="true">←<\/span> Your games<\/a>/g,
+  );
   expect(links).toHaveLength(1);
-  expect(classSet(links![0]!)).toContain("min-h-11");
+  const classes = classSet(links![0]!);
+  expect(classes).toContain("min-h-11");
+  expect(classes).toContain("text-base");
+  expect(classes).toContain("font-medium");
+  expect(classes).toContain("gap-1.5");
+  const main = classSet(html.match(/<main [^>]*>/)![0]);
+  expect(main).toContain("gap-2");
+  expect(main).not.toContain("gap-6");
 });
