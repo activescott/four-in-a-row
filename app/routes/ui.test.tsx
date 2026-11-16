@@ -465,3 +465,16 @@ test("the sign-in page tells people what their email is used for, under the emai
     html.indexOf("Email me a sign-in link"),
   );
 });
+
+test("the sign-in privacy note groups with the email field and both hints are 16px", () => {
+  const html = render("/login", Login, {
+    sent: false,
+    error: null,
+    redirectTo: null,
+    formToken: "t",
+  });
+  expect(html).toMatch(
+    /<p class="[^"]*\b-mt-1\b[^"]*\bmb-1\b[^"]*\btext-base\b[^"]*">We use/,
+  );
+  expect(html).toMatch(/<p class="[^"]*\btext-base\b[^"]*">First time\?/);
+});
