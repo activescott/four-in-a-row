@@ -20,9 +20,12 @@ import { currentClientIp } from "./client-ip.server";
 export function createSignupGate({
   db,
   logger,
+  shouldPrune,
 }: {
   db: PrismaClient;
   logger: Logger;
+  /** For tests: replaces the send limits' random prune draw. */
+  shouldPrune?: () => boolean;
 }): { gate: InitiateGate; transport(inner: EmailTransport): EmailTransport } {
   const allowed = async (email: string) =>
     (
@@ -30,6 +33,7 @@ export function createSignupGate({
         db,
         { address: email, kind: "signin", ip: currentClientIp() },
         logger,
+        { shouldPrune },
       )
     ).ok;
 
