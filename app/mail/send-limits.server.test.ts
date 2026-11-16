@@ -186,6 +186,42 @@ test("an invite to an address is still held to its daily cap whoever asks", asyn
   });
 });
 
+// The prune is housekeeping: a send that prunes is decided, and answered, the
+// same as one that doesn't (#69).
+test("pruning on every send changes neither the verdict nor which rows count", async () => {
+  const address = "prune-verdict@example.com";
+  const ip = "203.0.113.9";
+  await sentBefore(SEND_LIMITS.signInPerAddressPerHour - 1, {
+    address,
+    ip,
+    ageMs: 60_000,
+  });
+  const reserve = (shouldPrune: () => boolean) =>
+    reserveSend(db, { address, kind: "signin", ip }, logged().logger, {
+      shouldPrune,
+    });
+  await sentBefore(2, {
+    address: "ancient@example.com",
+    ip,
+    ageMs: THREE_DAYS,
+  });
+
+  const withPrune = [await reserve(() => true), await reserve(() => true)];
+  expect(
+    await db.emailSend.count({ where: { address: "ancient@example.com" } }),
+  ).toBe(0);
+  await db.emailSend.deleteMany({ where: { address } });
+  await sentBefore(SEND_LIMITS.signInPerAddressPerHour - 1, {
+    address,
+    ip,
+    ageMs: 60_000,
+  });
+  const withoutPrune = [await reserve(() => false), await reserve(() => false)];
+
+  expect(withPrune).toEqual([{ ok: true }, { ok: false, reason: "address" }]);
+  expect(withoutPrune).toEqual(withPrune);
+});
+
 test("a prune runs at startup, whatever the draw says", async () => {
   vi.spyOn(Math, "random").mockReturnValue(0.99);
   await sentBefore(2, {
