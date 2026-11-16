@@ -99,7 +99,7 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-test("behind the sign-up gate a stranger gets no mail and the same answer", async () => {
+test("behind the open sign-up gate a stranger is sent the mail too", async () => {
   const { sent, config } = setup();
   const send = vi.fn(async (mail: Mail) => {
     sent.push(mail);
@@ -107,7 +107,6 @@ test("behind the sign-up gate a stranger gets no mail and the same answer", asyn
   });
   const gate = createSignupGate({
     db,
-    signupEmails: "known@example.com",
     logger: createLogger(logCapture().destination),
   });
   const transport = gate.transport(createSignInTransport({ send }));
@@ -118,6 +117,9 @@ test("behind the sign-up gate a stranger gets no mail and the same answer", asyn
   expect(await transport.sendMagicLink("known@example.com", "l", config)).toBe(
     true,
   );
-  await vi.waitFor(() => expect(sent).toHaveLength(1));
-  expect(sent[0].to).toBe("known@example.com");
+  await vi.waitFor(() => expect(sent).toHaveLength(2));
+  expect(sent.map((mail) => mail.to).sort()).toEqual([
+    "known@example.com",
+    "stranger@example.com",
+  ]);
 });

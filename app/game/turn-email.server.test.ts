@@ -175,3 +175,48 @@ test("a failed send is logged and not retried", async () => {
   ]);
   expect(mailer.last(two.email, "turn")).toBeNull();
 });
+
+// #58: turn mail goes only to existing players, so only the per-address
+// limit applies to it.
+test("a your-turn email is recorded as a send, without a client IP", async () => {
+  const { one, two, gameId } = await game();
+
+  await play(gameId, one.id, 0);
+  await notifyTurn(db, mailer, { gameId, moveNumber: 1, appUrl: APP_URL });
+
+  expect(
+    await db.emailSend.findMany({ where: { address: two.email } }),
+  ).toMatchObject([{ kind: "turn", ip: null }]);
+});
+
+test("no your-turn email once the address has had 3 mails this hour, and email.limit is logged", async () => {
+  const { one, two, gameId } = await game();
+  await db.emailSend.createMany({
+    data: [1, 2, 3].map(() => ({ address: two.email, kind: "signin" })),
+  });
+
+  await play(gameId, one.id, 0);
+  await notifyTurn(db, mailer, { gameId, moveNumber: 1, appUrl: APP_URL });
+
+  expect(mailer.count(two.email, "turn")).toBe(0);
+  expect(log.capture.events("email.limit")).toMatchObject([
+    { reason: "address", kind: "turn" },
+  ]);
+});
+
+test("the IP and site-wide caps don't stop a your-turn email", async () => {
+  const { one, two, gameId } = await game();
+  await db.emailSend.createMany({
+    data: Array.from({ length: 100 }, (_, n) => ({
+      address: `turn-site-${n}-${seq}@example.com`,
+      kind: "signin",
+      ip: "203.0.113.90",
+    })),
+  });
+
+  await play(gameId, one.id, 0);
+  await notifyTurn(db, mailer, { gameId, moveNumber: 1, appUrl: APP_URL });
+
+  expect(mailer.count(two.email, "turn")).toBe(1);
+  await db.emailSend.deleteMany();
+});

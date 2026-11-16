@@ -53,12 +53,14 @@ function invite(
   inviter: { id: string; email: string },
   email: string,
   via: PrismaClient = db,
+  ip: string | null = `198.51.100.${++seq % 250}`,
 ) {
   return createInvite(via, mailer, {
     inviterId: inviter.id,
     inviterEmail: inviter.email,
     email,
     appUrl: APP_URL,
+    ip,
   });
 }
 
@@ -384,4 +386,100 @@ test("an unknown token, or a game with no invite, finds nothing", async () => {
     status: 404,
     reason: "not_found",
   });
+});
+
+// #58: invite mail goes through the same send limits as sign-in mail, and a
+// refusal answers as a send does (ok), so the form never says which
+// addresses are capped or have an account.
+const sends = (where: object) => db.emailSend.count({ where });
+
+test("an invite email is recorded as a send to its address, from the inviter's IP", async () => {
+  const alice = await user("alice");
+  const bob = address("bob");
+
+  await invite(alice, bob.toUpperCase(), db, "203.0.113.7");
+
+  expect(
+    await db.emailSend.findMany({ where: { address: bob } }),
+  ).toMatchObject([{ kind: "invite", ip: "203.0.113.7" }]);
+});
+
+test("an invite to an address already sent 3 mails this hour is answered ok and sends nothing", async () => {
+  const alice = await user("alice");
+  const bob = address("bob");
+  await db.emailSend.createMany({
+    data: [1, 2, 3].map(() => ({ address: bob, kind: "turn" })),
+  });
+
+  const result = await invite(alice, bob);
+
+  expect(result).toEqual({ ok: true, gameId: expect.any(String) });
+  expect(mailer.count(bob, "invite")).toBe(0);
+  expect(await sends({ address: bob })).toBe(3);
+  expect(log.capture.events("email.limit")).toMatchObject([
+    { reason: "address", kind: "invite" },
+  ]);
+});
+
+test("an invite from an IP that has mailed 10 addresses without an account today is answered ok and sends nothing", async () => {
+  const alice = await user("alice");
+  await db.emailSend.createMany({
+    data: Array.from({ length: 10 }, (_, n) => ({
+      address: `ip-capped-${n}-${seq}@example.com`,
+      kind: "signin",
+      ip: "203.0.113.80",
+    })),
+  });
+  const bob = address("bob");
+
+  expect(await invite(alice, bob, db, "203.0.113.80")).toMatchObject({
+    ok: true,
+  });
+  expect(mailer.count(bob, "invite")).toBe(0);
+  expect(log.capture.events("email.limit")).toMatchObject([{ reason: "ip" }]);
+
+  // The same IP can still invite a player who has an account.
+  const member = await user("member");
+  await db.user.update({
+    where: { id: member.id },
+    data: { approvedAt: new Date() },
+  });
+  await invite(alice, member.email, db, "203.0.113.80");
+  expect(mailer.count(member.email, "invite")).toBe(1);
+});
+
+test("an invite once the site has mailed 100 addresses without an account today is answered ok and sends nothing, and logs an error", async () => {
+  const alice = await user("alice");
+  await db.emailSend.deleteMany();
+  await db.emailSend.createMany({
+    data: Array.from({ length: 100 }, (_, n) => ({
+      address: `site-capped-${n}@example.com`,
+      kind: "invite",
+      ip: `192.0.2.${n}`,
+    })),
+  });
+  const bob = address("bob");
+
+  expect(await invite(alice, bob, db, "198.51.100.250")).toMatchObject({
+    ok: true,
+  });
+  expect(mailer.count(bob, "invite")).toBe(0);
+  expect(
+    log.capture.lines.filter((l) => l.event === "email.limit"),
+  ).toMatchObject([{ reason: "global", level: 50 }]);
+  await db.emailSend.deleteMany();
+});
+
+test("a refused invite still counts against the inviter's pending cap", async () => {
+  const alice = await user("alice");
+  const bob = address("bob");
+  await db.emailSend.createMany({
+    data: [1, 2, 3].map(() => ({ address: bob, kind: "turn" })),
+  });
+
+  await invite(alice, bob);
+
+  expect(
+    await db.invite.count({ where: { inviterId: alice.id, email: bob } }),
+  ).toBe(1);
 });

@@ -1,4 +1,3 @@
-import { InMemoryChallengeStore } from "@activescott/auth";
 import { NodemailerTransport } from "@activescott/auth-provider-email";
 import type { SendMailOptions } from "nodemailer";
 import { afterAll, expect, test, vi } from "vitest";
@@ -8,7 +7,7 @@ import { CookieJar } from "../test/cookie-jar";
 import { formPost, get, run } from "../test/routes";
 
 // Env for this file comes from vitest.config.mts: E2E_TEST_MODE=true, fake
-// secrets, and SIGNUP_EMAILS=seed@example.com.
+// secrets.
 
 const { getDb, capture } = vi.hoisted(() => ({
   getDb: vi.fn<() => Promise<PrismaClient>>(),
@@ -40,6 +39,7 @@ afterAll(async () => {
 const E2E_SECRET = { "x-e2e-secret": "test-only-e2e-capture-secret" };
 
 const authRoute = await import("./auth.$provider.$action");
+const games = await import("./games");
 const login = await import("./login");
 const logout = await import("./logout");
 const profile = await import("./profile");
@@ -239,34 +239,98 @@ test("the sign-in email comes from Four in a Row, with its name in the subject o
   });
 });
 
-// #43: the answer must not say whether an address has an account or an
-// invite, so a refused address gets what an allowed one gets, cookie and all.
-test("an address the gate does not allow gets the same answer as one it allows, and no mail", async () => {
-  const shape = (response: Response) => ({
-    status: response.status,
-    location: response.headers.get("location"),
-    setCookie: response.headers
-      .getSetCookie()
-      .map((cookie) => cookie.replace(/=[^;]*/, "=<id>")),
-  });
+// #43: the answer must not say whether an address has an account, so a
+// capped address gets what any other gets, cookie and all.
+const shape = (response: Response) => ({
+  status: response.status,
+  location: response.headers.get("location"),
+  setCookie: response.headers
+    .getSetCookie()
+    .map((cookie) => cookie.replace(/=[^;]*/, "=<id>")),
+});
+
+test("a capped address gets the same answer as one that is sent mail, and no mail", async () => {
   const allowed = await requestEmail(
     new CookieJar(),
     await member("allowed-twin@example.com"),
     "/profile",
   );
+  const capped = "capped-address@example.com";
+  await db.emailSend.createMany({
+    data: [1, 2, 3].map(() => ({ address: capped, kind: "signin" })),
+  });
 
-  const refused = await requestEmail(
-    new CookieJar(),
-    "stranger@example.com",
-    "/profile",
-  );
+  const refused = await requestEmail(new CookieJar(), capped, "/profile");
 
   expect(shape(refused)).toEqual(shape(allowed));
   expect(shape(refused).location).toMatch(/[?&]sent=1/);
-  expect((await readCapturedEmail("stranger@example.com")).status).toBe(404);
+  expect((await readCapturedEmail(capped)).status).toBe(404);
+  expect(events("email.limit")).toContainEqual(
+    expect.objectContaining({ reason: "address" }),
+  );
+});
+
+test("an address over the IP cap gets the same answer, and no mail", async () => {
+  const allowed = await requestEmail(
+    new CookieJar(),
+    await member("ip-twin@example.com"),
+    "/profile",
+  );
+  await db.emailSend.createMany({
+    data: Array.from({ length: 10 }, (_, n) => ({
+      address: `ip-earlier-${n}@example.com`,
+      kind: "signin",
+      ip: "203.0.113.50",
+    })),
+  });
+  const email = "ip-capped@example.com";
+  const request = formPost(
+    "/auth/email/initiate",
+    { email, redirectTo: "/profile" },
+    { referer: "/login" },
+  );
+  // Traefik appends the peer it saw; the caller's own claims come first.
+  request.headers.set("x-forwarded-for", "10.9.9.9, 203.0.113.50");
+  request.headers.set("cf-connecting-ip", "198.51.100.200");
+
+  const refused = await auth(request);
+
+  expect(shape(refused)).toEqual(shape(allowed));
+  expect(shape(refused).location).toMatch(/[?&]sent=1/);
+  expect((await readCapturedEmail(email)).status).toBe(404);
+  expect(events("email.limit")).toContainEqual(
+    expect.objectContaining({ reason: "ip" }),
+  );
+});
+
+test("the site-wide cap stops mail to a never-seen address and logs at error level", async () => {
+  await db.emailSend.createMany({
+    data: Array.from({ length: 100 }, (_, n) => ({
+      address: `site-earlier-${n}@example.com`,
+      kind: "signin",
+      ip: `192.0.2.${n}`,
+    })),
+  });
+  const email = "site-capped@example.com";
+
+  const refused = await requestEmail(new CookieJar(), email, "/profile");
+
+  expect(refused.headers.get("location")).toMatch(/[?&]sent=1/);
+  expect((await readCapturedEmail(email)).status).toBe(404);
   expect(
-    await db.user.count({ where: { email: "stranger@example.com" } }),
-  ).toBe(0);
+    capture.lines.filter(
+      (l) => l.event === "email.limit" && l.reason === "global",
+    ),
+  ).toEqual([expect.objectContaining({ level: 50 })]);
+  // An existing account is still sent mail.
+  const { jar, response } = await signIn(
+    await member("global-member@example.com"),
+  );
+  expect(response.status).toBe(302);
+  expect(jar.header()).toContain("session=");
+  await db.emailSend.deleteMany({
+    where: { address: { startsWith: "site-earlier-" } },
+  });
 });
 
 test("a request for a host other than APP_URL's is refused and no mail is sent", async () => {
@@ -308,7 +372,7 @@ test("a fresh cf-connecting-ip on each request does not escape the per-IP limit"
   ]);
 });
 
-test("an existing account can sign in again although it is not in SIGNUP_EMAILS", async () => {
+test("an existing account can sign in again", async () => {
   const { response } = await signIn(await member("member@example.com"));
 
   expect(response.status).toBe(302);
@@ -339,125 +403,32 @@ test("a wrong code is refused and logs auth.signin.failed", async () => {
   );
 });
 
-// The library stores a live code for every initiate, a refused address's
-// too (#43), so the gate must refuse the account at verify. Here the address
-// was invited when the code went out and the invite has lapsed since, which
-// gives the test a correct code for an address the gate no longer allows.
-// A correct code in `jar` for `email`, which the gate no longer allows.
-async function lapsedInviteCode(email: string) {
-  const { id: inviterId } = await db.user.create({
-    data: { email: `inviter-of-${email}`, approvedAt: new Date() },
-  });
-  const game = await db.game.create({
-    data: { playerOneId: inviterId, status: "INVITED" },
-  });
-  const invite = await db.invite.create({
-    data: {
-      gameId: game.id,
-      inviterId,
-      email,
-      tokenHash: `hash-${email}`,
-      expiresAt: new Date(Date.now() + 60_000),
-    },
-  });
+// #58: no invite, account or SIGNUP_EMAILS place is needed.
+test("a never-seen address gets a sign-in email, signs in with the code and reaches /games as a new account", async () => {
+  const email = "newcomer@example.com";
+  expect(await db.user.count({ where: { email } })).toBe(0);
   const jar = new CookieJar();
-  await requestEmail(jar, email);
-  const { code } = await (await readCapturedEmail(email)).json();
-  await db.invite.update({
-    where: { id: invite.id },
-    data: { expiresAt: new Date(Date.now() - 1) },
-  });
-  return { jar, code: code as string };
-}
 
-function verifyCode(jar: CookieJar, code: string) {
-  return auth(
+  await requestEmail(jar, email, "/games");
+  const { code } = await (await readCapturedEmail(email)).json();
+  const response = await auth(
     formPost(
       "/auth/email/verify",
-      { code },
+      { code, redirectTo: "/games" },
       { cookie: jar.header(), referer: "/login" },
     ),
   );
-}
-
-const sessionCookie = (response: Response) =>
-  /(^|, )session=[^;]/.test(response.headers.getSetCookie().join(", "));
-
-test("a correct code for an address the gate does not allow is refused and leaves no account", async () => {
-  const email = "lapsed-invitee@example.com";
-  const { jar, code } = await lapsedInviteCode(email);
-
-  const response = await verifyCode(jar, code);
+  jar.store(response);
 
   expect(response.status).toBe(302);
-  expect(response.headers.get("location")).toMatch(
-    /^\/login\?error=INVALID_CREDENTIALS/,
+  expect(response.headers.get("location")).toBe("/games");
+  const user = await db.user.findUniqueOrThrow({ where: { email } });
+  expect(user.approvedAt).toBeInstanceOf(Date);
+  const page = await run(games.loader, get("/games", { cookie: jar.header() }));
+  expect(page).not.toBeInstanceOf(Response);
+  expect(events("auth.signin.succeeded")).toContainEqual(
+    expect.objectContaining({ userId: user.id, isNewUser: true }),
   );
-  expect(sessionCookie(response)).toBe(false);
-  expect(await db.user.count({ where: { email } })).toBe(0);
-  expect(await db.identity.count({ where: { identifier: email } })).toBe(0);
-});
-
-// Two verifies of one correct code, forced into the order that let the
-// second one in: both pass the code check before either consumes the
-// challenge, A inserts the users row and is held before its identity
-// insert, and B finds A's row, inserts its identity and returns while A is
-// still held. Under a connection pool this needs no help, just bad luck.
-test("the same correct code verified twice at once is refused both times and leaves no account", async () => {
-  const email = "raced-invitee@example.com";
-  const { jar, code } = await lapsedInviteCode(email);
-  const signal = () => {
-    let resolve!: () => void;
-    const promise = new Promise<void>((r) => (resolve = r));
-    return { promise, resolve };
-  };
-  const bAtConsume = signal();
-  const aAtIdentity = signal();
-  const bReturned = signal();
-
-  const consume = InMemoryChallengeStore.prototype.delete;
-  const consumeSpy = vi
-    .spyOn(InMemoryChallengeStore.prototype, "delete")
-    .mockImplementationOnce(async function (this: InMemoryChallengeStore, id) {
-      await bAtConsume.promise;
-      return consume.call(this, id);
-    })
-    .mockImplementationOnce(async function (this: InMemoryChallengeStore, id) {
-      bAtConsume.resolve();
-      await aAtIdentity.promise;
-      return consume.call(this, id);
-    });
-  const create = db.identity.create.bind(db.identity);
-  const createSpy = vi.spyOn(db.identity, "create").mockImplementationOnce(((
-    args: Parameters<typeof create>[0],
-  ) => {
-    aAtIdentity.resolve();
-    return bReturned.promise.then(() => create(args));
-  }) as unknown as typeof create);
-
-  const posts = [verifyCode(jar, code), verifyCode(jar, code)].map((post) =>
-    post.catch((error: unknown) => error),
-  );
-  // A is held until B returns, so the first to settle is B.
-  const b = await Promise.race(posts);
-  bReturned.resolve();
-  const results = await Promise.all(posts);
-  expect(createSpy).toHaveBeenCalledTimes(2);
-  consumeSpy.mockRestore();
-  createSpy.mockRestore();
-
-  expect(b).toBeInstanceOf(Response);
-  expect((b as Response).headers.get("location")).toMatch(
-    /^\/login\?error=INVALID_CREDENTIALS/,
-  );
-  for (const result of results) {
-    if (result instanceof Response) {
-      expect(result.headers.get("location")).not.toBe("/profile");
-      expect(sessionCookie(result)).toBe(false);
-    }
-  }
-  expect(await db.user.count({ where: { email } })).toBe(0);
-  expect(await db.identity.count({ where: { identifier: email } })).toBe(0);
 });
 
 test("logout clears the session", async () => {

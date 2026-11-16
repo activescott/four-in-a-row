@@ -1,5 +1,4 @@
 import { defineConfig, devices } from "@playwright/test";
-import { inviterEmail } from "./e2e/players";
 
 const APP_PORT = 3100;
 const TLS_PORT = 3443;
@@ -9,11 +8,24 @@ const baseURL = `https://localhost:${TLS_PORT}`;
 // this file too, so they see the same value.
 process.env.E2E_CAPTURE_SECRET ??= "e2e-only-capture-secret";
 
+// Each project is its own client, as Traefik would report it (it appends the
+// peer it saw to X-Forwarded-For), so the per-IP send limit that sign-up has
+// doesn't tie the three browsers' new accounts together.
+const client = (n: number) => ({
+  extraHTTPHeaders: { "x-forwarded-for": `198.51.100.${n}` },
+});
+
 const projects = [
   // iPhone 13: 390x844, Mobile Safari's engine.
-  { name: "mobile-webkit", use: { ...devices["iPhone 13"] } },
-  { name: "desktop-chromium", use: { ...devices["Desktop Chrome"] } },
-  { name: "desktop-firefox", use: { ...devices["Desktop Firefox"] } },
+  { name: "mobile-webkit", use: { ...devices["iPhone 13"], ...client(1) } },
+  {
+    name: "desktop-chromium",
+    use: { ...devices["Desktop Chrome"], ...client(2) },
+  },
+  {
+    name: "desktop-firefox",
+    use: { ...devices["Desktop Firefox"], ...client(3) },
+  },
 ];
 
 export default defineConfig({
@@ -50,7 +62,6 @@ export default defineConfig({
         SMTP_USER: "e2e",
         SMTP_PASS: "e2e-only",
         FROM_EMAIL: "noreply@example.com",
-        SIGNUP_EMAILS: projects.map((p) => inviterEmail(p.name)).join(","),
         E2E_TEST_MODE: "true",
         E2E_CAPTURE_SECRET: process.env.E2E_CAPTURE_SECRET,
       },
