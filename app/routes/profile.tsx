@@ -1,5 +1,5 @@
 import { ProfilePage } from "@activescott/auth-adapter-react-router/profile";
-import { Form, Link, useRevalidator } from "react-router";
+import { Link, useRevalidator } from "react-router";
 import { profileAuthLoader, requireAuth } from "../auth.server";
 import { passkeys } from "../passkey.client";
 import type { Route } from "./+types/profile";
@@ -17,28 +17,25 @@ export async function loader({ request }: Route.LoaderArgs) {
   };
 }
 
+// The library's default look follows the device's dark mode. Naming these two
+// slots replaces it, so the page stays light like the rest of the app.
+const LIGHT = {
+  container: "text-slate-900 [color-scheme:light]",
+  card: "mb-4 rounded-lg border border-slate-300 bg-white",
+};
+
 export default function Profile({ loaderData }: Route.ComponentProps) {
   const revalidator = useRevalidator();
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-6 p-6">
-      <Link to="/games" className="text-slate-700 underline">
-        Your games
-      </Link>
       <ProfilePage
         {...loaderData}
         passkeyClient={passkeys}
         onPasskeyRegistered={revalidator.revalidate}
         allowRemove
         linkComponent={Link}
+        classNames={LIGHT}
       />
-      <Form method="post" action="/logout" reloadDocument>
-        <button
-          type="submit"
-          className="rounded bg-slate-900 px-4 py-2 font-medium text-white"
-        >
-          Sign out
-        </button>
-      </Form>
     </main>
   );
 }
