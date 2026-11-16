@@ -73,7 +73,8 @@ test("A invites B by email and they play to a win, live on both boards", async (
   const emailA = inviterEmail(testInfo.project.name);
   const emailB = inviteeEmail(testInfo.project.name);
 
-  // A signs in with the emailed link.
+  // A signs in with the emailed link. Nobody invited A and no allowlist names
+  // them: a never-seen address signs up and reaches /games (#58).
   await a.goto("/login");
   await a.getByLabel("Email").fill(emailA);
   await waitOutFormToken(a);
@@ -88,9 +89,11 @@ test("A invites B by email and they play to a win, live on both boards", async (
   );
   await confirmSignIn(a, linkA);
   await expect(a).toHaveURL(/\/profile$/);
+  await a.goto("/games");
+  await expect(a).toHaveURL(/\/games$/);
+  await expect(a.getByRole("button", { name: "Invite" })).toBeVisible();
 
   // A invites B and lands on the new game's board.
-  await a.goto("/games");
   await a.locator("#invite-email").fill(emailB);
   const invite = await newLink(
     request,

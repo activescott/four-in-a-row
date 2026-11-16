@@ -15,6 +15,7 @@ import {
   PasskeyProvider,
 } from "@activescott/auth-provider-passkey";
 import { createPrismaIdentityStore } from "@activescott/auth-store-prisma";
+import { clientIp, withClientIp } from "./auth/client-ip.server";
 import { createSignupGate } from "./auth/signup-gate.server";
 import { createUserStore } from "./auth/user-store.server";
 import { getDb } from "./db.server";
@@ -63,11 +64,7 @@ export const emailConfig = validateEmailConfig({
 });
 
 const db = await getDb();
-const signup = createSignupGate({
-  db,
-  signupEmails: env.SIGNUP_EMAILS,
-  logger,
-});
+const signup = createSignupGate({ db, logger });
 
 // The sign-up gate decides here, not before the send, which addresses get
 // mail; see createSignupGate.
@@ -101,13 +98,8 @@ export const auth = new Auth({
       logger.warn({ event: "auth.warn", ...context }, message),
   },
   abuse: {
-    // Traefik appends the peer it saw to X-Forwarded-For; everything left of
-    // that hop, and cf-connecting-ip, is whatever the caller sent.
-    clientIp: {
-      getClientIp: (request) =>
-        request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() ||
-        null,
-    },
+    // The email send limits use the same client address (see clientIp).
+    clientIp: { getClientIp: clientIp },
     onBlocked: ({ reason, providerId, rule }) =>
       logger.warn({
         event: "auth.initiate.blocked",
@@ -159,7 +151,8 @@ export function serveAuth(request: Request) {
   if (appUrl && new URL(request.url).host !== new URL(appUrl).host) {
     return new Response("Misdirected Request", { status: 421 });
   }
-  return handleAuth({ request });
+  // The email transport reads the client's address from here; see clientIp.
+  return withClientIp(clientIp(request), () => handleAuth({ request }));
 }
 
 export const { signInLoader, profileAuthLoader } = createAuthPageLoaders(auth, {

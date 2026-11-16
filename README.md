@@ -32,7 +32,20 @@ With `DATABASE_URL` set, the app uses Postgres instead of PGlite. Health checks 
 
 ## Sign-in
 
-Sign-in uses [`@activescott/auth`](https://github.com/activescott/auth): an email link or code at `/login`, and passkeys added from `/profile`. Only an address that already has an account, has a pending invite, or is listed in `SIGNUP_EMAILS` is sent a sign-in email; every other address gets the same answer, so the form never says which addresses can sign in. The library still stores a code for that address, so a correct guess reaches verify, which inserts the account before the gate runs. An account counts only once the gate has approved it (`users.approved_at`), so the gate refuses a sign-in to any unapproved account without an invite or a `SIGNUP_EMAILS` place and deletes it, and the sign-in email goes only to approved accounts.
+Sign-in uses [`@activescott/auth`](https://github.com/activescott/auth): an email link or code at `/login`, and passkeys added from `/profile`. Anyone can sign up: a never-seen address that enters its email at `/login` is sent a sign-in email, and a verified sign-in creates the account. To keep the app from becoming a way to mail strangers, every sign-in, invite and turn email is checked against send limits and recorded in the `email_sends` table (limits in `app/mail/send-limits.server.ts`):
+
+| Limit                                          | Value               | Mail it counts                      |
+| ---------------------------------------------- | ------------------- | ----------------------------------- |
+| Per address, sign-in                           | 5 an hour, 10 a day | Sign-in, including the "link" email |
+| Per address, invite                            | 2 a day             | Invites to that address             |
+| Per address, turn                              | 10 an hour          | "Your turn" mail, its own bucket    |
+| Per client IP, to any address                  | 30 an hour          | Sign-in                             |
+| Per client IP, to addresses without an account | 10 a day            | Sign-in and invite                  |
+| Site-wide, to addresses without an account     | 100 a day           | Sign-in and invite                  |
+
+Each kind has its own per-address bucket, so invites and turn mail can't use up a player's sign-in quota. An attacker who knows an address can still use up its sign-in emails for an hour by asking for them (5 an hour); passkey sign-in is unaffected, since it sends no email.
+
+Over a limit, nothing is sent, the form gives the same answer as for a sent email, and the app logs `email.limit` with the reason (`address`, `ip`, `global` or `error`; `global` and `error` at error level) and the client's key, never the address. A database error while checking is a refusal, answered the same. Every send that isn't turn mail does the same database work whatever the address and verdict, and invite and sign-in emails are sent in the background, so how long a request takes doesn't say which addresses have an account. So the form never says which addresses have an account. The client IP is the last `X-Forwarded-For` hop, the one Traefik appends, as for the auth library's own rate limits; a request without one is counted in a shared bucket and logs `email.limit.no_ip`. Rows older than 2 days are deleted by a prune that runs on about 1 send in 20.
 
 ## Invites
 
@@ -45,7 +58,6 @@ Sign-in uses [`@activescott/auth`](https://github.com/activescott/auth): an emai
 | `APP_URL`                                                         | Canonical URL for passkeys and email links. Required in production.                        |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Outgoing mail. In dev without `SMTP_HOST`, the link is printed to the console.             |
 | `FROM_EMAIL`                                                      | Sender address.                                                                            |
-| `SIGNUP_EMAILS`                                                   | Addresses that may sign up without an invite, separated by commas or spaces.               |
 | `E2E_TEST_MODE`                                                   | `true` captures all mail instead of sending it. Never set in production.                   |
 | `E2E_CAPTURE_SECRET`                                              | Required with `E2E_TEST_MODE`; the `x-e2e-secret` header for `/e2e/captured-email?email=`. |
 

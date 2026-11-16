@@ -1,5 +1,6 @@
 import { data, Form, Link, redirect, useNavigation } from "react-router";
 import { requireAuth } from "../auth.server";
+import { clientIp } from "../auth/client-ip.server";
 import { getDb } from "../db.server";
 import { displayName } from "../game/display";
 import { Wrappable } from "../game/wrappable";
@@ -30,10 +31,6 @@ const INVITE_ERRORS: Record<InviteError, { status: number; error: string }> = {
     status: 429,
     error: `You have ${MAX_PENDING_INVITES} invites waiting. Wait until one is accepted or expires.`,
   },
-  not_sent: {
-    status: 502,
-    error: "The invite email couldn't be sent. Try again in a minute.",
-  },
 };
 
 // POST /games with email=<address> starts a game by invite (#14), or with
@@ -48,6 +45,7 @@ export async function action({ request }: Route.ActionArgs) {
       inviterEmail: user.email,
       email,
       appUrl: appUrl(request),
+      ip: clientIp(request),
     });
     if (result.ok) return redirect(`/games/${result.gameId}`);
     if (result.error === "already_invited") {

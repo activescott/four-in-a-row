@@ -57,6 +57,10 @@ export default function Login({ loaderData }: Route.ComponentProps) {
           onChange={(event) => setEmail(event.target.value)}
           className={input}
         />
+        <p className="text-sm text-slate-600">
+          We use your email only to sign you in and send your game emails. We
+          never share or sell it.
+        </p>
         <button type="submit" className={button}>
           {sent ? "Send again" : "Email me a sign-in link"}
         </button>

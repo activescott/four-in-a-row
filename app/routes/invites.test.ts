@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { PrismaClient } from "../generated/prisma/client";
+import { SEND_LIMITS } from "../mail/send-limits.server";
 import { createPgliteDb } from "../pglite.server";
 import { CookieJar } from "../test/cookie-jar";
 import { formPost, get, logCapture, run } from "../test/routes";
@@ -91,12 +92,20 @@ async function authRequest(request: Request) {
 }
 
 // A's "New game" form on /games.
-async function sendInvite(from: Player, email: string) {
-  return (await run(
-    games.action,
-    formPost("/games", { email }, { cookie: from.cookie, referer: "/games" }),
-  )) as Response;
+// Each request comes from its own client unless `ip` says otherwise, so the
+// per-IP send limit doesn't tie the tests together.
+async function sendInvite(from: Player, email: string, ip = nextIp()) {
+  const request = formPost(
+    "/games",
+    { email },
+    { cookie: from.cookie, referer: "/games" },
+  );
+  request.headers.set("x-forwarded-for", `10.9.9.9, ${ip}`);
+  return (await run(games.action, request)) as Response;
 }
+
+let ipSeq = 0;
+const nextIp = () => `198.51.100.${++ipSeq % 250}`;
 
 function inviteToken(email: string) {
   const link = captureMailer!.last(email, "invite")!.link;
@@ -136,14 +145,12 @@ async function sendFromInvitePage(
   cookie = "",
   fields: Record<string, string> = {},
 ) {
-  return (await run(
-    invite.action,
-    formPost(`/invite/${token}`, fields, {
-      cookie,
-      referer: `/invite/${token}`,
-    }),
-    { key: token },
-  )) as Response;
+  const request = formPost(`/invite/${token}`, fields, {
+    cookie,
+    referer: `/invite/${token}`,
+  });
+  request.headers.set("x-forwarded-for", `10.9.9.9, ${nextIp()}`);
+  return (await run(invite.action, request, { key: token })) as Response;
 }
 
 // b•••@example.com: enough for B to recognise, not enough to learn.
@@ -342,7 +349,7 @@ test("inviting the same address again says it's already invited", async () => {
   });
 });
 
-test("an expired invite link says so, and its sign-in sends nothing", async () => {
+test("an expired invite link says so, and its page sends no sign-in email", async () => {
   const alice = await player("alice");
   const bob = address("bob");
   const sent = await sendInvite(alice, bob);
@@ -360,20 +367,6 @@ test("an expired invite link says so, and its sign-in sends nothing", async () =
   expect(log.capture.events("invite.expired")).toContainEqual(
     expect.objectContaining({ gameId }),
   );
-  const refused = await authRequest(
-    formPost(
-      "/auth/email/initiate",
-      { email: bob, redirectTo: `/invite/${gameId}` },
-      { referer: `/invite/${token}` },
-    ),
-  );
-  // The same answer as a sent one (#43), but no sign-in email.
-  expect(refused.headers.get("location")).toContain(`/invite/${token}?sent=1`);
-  const readback = (await run(
-    capturedEmail.loader,
-    get(`/e2e/captured-email?email=${encodeURIComponent(bob)}`, E2E_SECRET),
-  )) as Response;
-  expect(await readback.json()).not.toHaveProperty("magicLink");
 });
 
 test("the invite page sends its sign-in email only to the invited address", async () => {
@@ -482,4 +475,47 @@ test("/e2e/captured-email also returns the last invite and turn email for an add
       link: `http://localhost/invite/${inviteToken(bob)}`,
     },
   });
+});
+
+// #58 + #43: a capped invite is answered exactly as a sent one.
+test("an invite the send limits refuse gets the same response as one that is sent", async () => {
+  const alice = await player("alice");
+  const shape = async (response: Response) => ({
+    status: response.status,
+    location: response.headers
+      .get("location")
+      ?.replace(/[0-9a-f-]{36}$/, "<id>"),
+    headers: [...response.headers.keys()].sort(),
+    body: await response.text(),
+  });
+  const sentTo = address("sent");
+  const cappedAddress = address("capped-address");
+  const cappedIp = address("capped-ip");
+  await db.emailSend.createMany({
+    data: [
+      ...Array.from({ length: SEND_LIMITS.invitePerAddressPerDay }, () => ({
+        address: cappedAddress,
+        kind: "invite",
+      })),
+      ...Array.from({ length: 10 }, (_, n) => ({
+        address: `earlier-${n}-${seq}@example.com`,
+        kind: "signin",
+        ip: "203.0.113.60",
+      })),
+    ],
+  });
+
+  const sent = await shape(await sendInvite(alice, sentTo));
+  const byAddress = await shape(await sendInvite(alice, cappedAddress));
+  const byIp = await shape(await sendInvite(alice, cappedIp, "203.0.113.60"));
+
+  expect(byAddress).toEqual(sent);
+  expect(byIp).toEqual(sent);
+  expect(captureMailer!.count(sentTo, "invite")).toBe(1);
+  expect(captureMailer!.count(cappedAddress, "invite")).toBe(0);
+  expect(captureMailer!.count(cappedIp, "invite")).toBe(0);
+  expect(log.capture.events("email.limit")).toEqual([
+    expect.objectContaining({ reason: "address", kind: "invite" }),
+    expect.objectContaining({ reason: "ip", kind: "invite" }),
+  ]);
 });

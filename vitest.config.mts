@@ -13,7 +13,6 @@ export default defineConfig({
       SMTP_USER: "test-user",
       SMTP_PASS: "test-only-not-a-password",
       FROM_EMAIL: "noreply@example.com",
-      SIGNUP_EMAILS: "seed@example.com",
       E2E_TEST_MODE: "true",
       E2E_CAPTURE_SECRET: "test-only-e2e-capture-secret",
     },

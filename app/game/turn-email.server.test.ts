@@ -1,7 +1,9 @@
 import { afterAll, afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { PrismaClient } from "../generated/prisma/client";
 import { CaptureMailer } from "../mail/mailer.server";
+import { SEND_LIMITS } from "../mail/send-limits.server";
 import { createPgliteDb } from "../pglite.server";
+import { failingDb } from "../test/db-calls";
 import { logCapture } from "../test/routes";
 
 const log = vi.hoisted(() => ({
@@ -174,4 +176,103 @@ test("a failed send is logged and not retried", async () => {
     expect.objectContaining({ gameId, moveNumber, userId: two.id }),
   ]);
   expect(mailer.last(two.email, "turn")).toBeNull();
+});
+
+// #58: turn mail goes only to existing players, so only the per-address
+// limit applies to it.
+test("a your-turn email is recorded as a send, without a client IP", async () => {
+  const { one, two, gameId } = await game();
+
+  await play(gameId, one.id, 0);
+  await notifyTurn(db, mailer, { gameId, moveNumber: 1, appUrl: APP_URL });
+
+  expect(
+    await db.emailSend.findMany({ where: { address: two.email } }),
+  ).toMatchObject([{ kind: "turn", ip: null }]);
+});
+
+test("no your-turn email once the address has had 10 turn mails this hour, and email.limit is logged", async () => {
+  const { one, two, gameId } = await game();
+  await db.emailSend.createMany({
+    data: Array.from({ length: SEND_LIMITS.turnPerAddressPerHour }, () => ({
+      address: two.email,
+      kind: "turn",
+    })),
+  });
+
+  await play(gameId, one.id, 0);
+  await notifyTurn(db, mailer, { gameId, moveNumber: 1, appUrl: APP_URL });
+
+  expect(mailer.count(two.email, "turn")).toBe(0);
+  expect(log.capture.events("email.limit")).toMatchObject([
+    { reason: "address", kind: "turn" },
+  ]);
+});
+
+test("sign-in and invite mail don't use up the turn quota, and turn mail has its own bucket", async () => {
+  const { one, two, gameId } = await game();
+  await db.emailSend.createMany({
+    data: [
+      ...Array.from({ length: 6 }, () => ({
+        address: two.email,
+        kind: "signin",
+        ip: "198.51.100.9",
+      })),
+      ...Array.from({ length: 3 }, () => ({
+        address: two.email,
+        kind: "invite",
+        ip: "198.51.100.9",
+      })),
+    ],
+  });
+
+  await play(gameId, one.id, 0);
+  await notifyTurn(db, mailer, { gameId, moveNumber: 1, appUrl: APP_URL });
+
+  expect(mailer.count(two.email, "turn")).toBe(1);
+  expect(log.capture.events("email.limit")).toEqual([]);
+});
+
+test("turn mail has no client IP, so it isn't warned about", async () => {
+  const { one, gameId } = await game();
+
+  await play(gameId, one.id, 0);
+  await notifyTurn(db, mailer, { gameId, moveNumber: 1, appUrl: APP_URL });
+
+  expect(log.capture.events("email.limit.no_ip")).toEqual([]);
+});
+
+test("a database error in the send limits means no your-turn email, logged at error level, and no throw", async () => {
+  const { one, two, gameId } = await game();
+  const broken = failingDb(
+    db,
+    ({ model, operation }) => model === "EmailSend" && operation === "create",
+  );
+
+  await play(gameId, one.id, 0);
+  await expect(
+    notifyTurn(broken, mailer, { gameId, moveNumber: 1, appUrl: APP_URL }),
+  ).resolves.toBeUndefined();
+
+  expect(mailer.count(two.email, "turn")).toBe(0);
+  expect(log.capture.events("email.limit")).toEqual([
+    expect.objectContaining({ reason: "error", level: 50, kind: "turn" }),
+  ]);
+});
+
+test("the IP and site-wide caps don't stop a your-turn email", async () => {
+  const { one, two, gameId } = await game();
+  await db.emailSend.createMany({
+    data: Array.from({ length: 100 }, (_, n) => ({
+      address: `turn-site-${n}-${seq}@example.com`,
+      kind: "signin",
+      ip: "203.0.113.90",
+    })),
+  });
+
+  await play(gameId, one.id, 0);
+  await notifyTurn(db, mailer, { gameId, moveNumber: 1, appUrl: APP_URL });
+
+  expect(mailer.count(two.email, "turn")).toBe(1);
+  await db.emailSend.deleteMany();
 });

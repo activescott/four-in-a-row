@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { PrismaClient } from "../generated/prisma/client";
 import { logger } from "../logger.server";
-import type { Mailer } from "../mail/mailer.server";
+import type { Mail, Mailer } from "../mail/mailer.server";
+import { reserveSend } from "../mail/send-limits.server";
 import { inviteEmail } from "../mail/templates";
 
 // Invites (#14): the app emails a random, single-use token that expires in
@@ -22,7 +23,7 @@ export function hashToken(token: string) {
 
 const pending = (now: Date) => ({ acceptedAt: null, expiresAt: { gt: now } });
 
-export type InviteError = "invalid_email" | "self" | "capped" | "not_sent";
+export type InviteError = "invalid_email" | "self" | "capped";
 export type InviteOutcome =
   | { ok: true; gameId: string }
   | { ok: false; error: InviteError }
@@ -32,8 +33,9 @@ export type InviteOutcome =
 
 /**
  * Starts an INVITED game with the inviter to move first, and emails the
- * invitee a link to /invite/:token. Whether the address has an account is
- * never looked up, so the answer and the work done are the same either way.
+ * invitee a link to /invite/:token. The answer and the work done are the
+ * same whether the address has an account, the send limits allowed the email
+ * or the relay will refuse it. The email is sent in the background.
  */
 export async function createInvite(
   db: PrismaClient,
@@ -43,9 +45,11 @@ export async function createInvite(
     inviterEmail: string;
     email: string;
     appUrl: string;
+    /** The inviter's address as the proxy saw it, for the send limits. */
+    ip: string | null;
   },
 ): Promise<InviteOutcome> {
-  const { inviterId, inviterEmail, appUrl } = input;
+  const { inviterId, inviterEmail, appUrl, ip } = input;
   const email = input.email.trim().toLowerCase();
   if (email.length > 254 || !EMAIL.test(email)) {
     return { ok: false, error: "invalid_email" };
@@ -94,20 +98,63 @@ export async function createInvite(
   }
 
   const { gameId, inviteId } = created;
-  const link = new URL(`/invite/${token}`, appUrl).toString();
-  const sent = await mailer.send(
-    inviteEmail({ to: email, inviterEmail, link }),
-  );
-  if (!sent) {
-    logger.error({ event: "email.invite.failed", gameId, inviteId, inviterId });
-    // Nobody can join a game whose invite never arrived; the cascade takes
-    // the invite with it, so the cap isn't used up.
-    await db.game.delete({ where: { id: gameId } });
-    return { ok: false, error: "not_sent" };
+  // Over a send limit (#58) the invite still stands and the answer is the
+  // same as for a sent one, so the form never says which addresses are capped
+  // or have an account. The invitee can still sign in from /login, which is
+  // under the same limits. The invite keeps counting toward the pending cap.
+  // That is an accepted risk: the cap of 5 bounds what a refused invite leaves.
+  const allowed = (
+    await reserveSend(db, { address: email, kind: "invite", ip })
+  ).ok;
+  if (allowed) {
+    const link = new URL(`/invite/${token}`, appUrl).toString();
+    // Not awaited: waiting on the relay only for sent invites would make them
+    // measurably slower than refused ones, which says who has an account.
+    // If the relay fails, nobody can join a game whose invite never arrived,
+    // so the game goes, and the cascade takes the invite, so the cap isn't
+    // used up.
+    void deliver(mailer, inviteEmail({ to: email, inviterEmail, link })).then(
+      async (sent) => {
+        if (sent) {
+          logger.info({
+            event: "email.invite.sent",
+            gameId,
+            inviteId,
+            inviterId,
+          });
+          return;
+        }
+        logger.error({
+          event: "email.invite.failed",
+          gameId,
+          inviteId,
+          inviterId,
+        });
+        try {
+          await db.game.delete({ where: { id: gameId } });
+        } catch {
+          logger.error({
+            event: "email.invite.cleanup_failed",
+            gameId,
+            inviteId,
+            inviterId,
+          });
+        }
+      },
+    );
   }
   logger.info({ event: "game.created", gameId, userId: inviterId });
-  logger.info({ event: "email.invite.sent", gameId, inviteId, inviterId });
   return { ok: true, gameId };
+}
+
+// The mailer promises not to throw; this keeps a broken one from leaving an
+// unhandled rejection behind a send nobody is waiting for.
+async function deliver(mailer: Mailer, mail: Mail) {
+  try {
+    return await mailer.send(mail);
+  } catch {
+    return false;
+  }
 }
 
 export type InviteState = "pending" | "expired" | "used";
