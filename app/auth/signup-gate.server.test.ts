@@ -236,14 +236,13 @@ test("invite and turn mail don't use up an address's sign-in quota", async () =>
     ip: null,
   });
 
-  for (let n = 0; n < SEND_LIMITS.signInPerAddressPerHour; n++) {
-    expect(await signInMail(signup, "bystander@example.com")).toMatchObject({
-      sent: true,
-    });
+  for (let n = 0; n < SEND_LIMITS.signInPerAddressPerHour + 1; n++) {
+    await signInMail(signup, "bystander@example.com");
   }
-  expect(await signInMail(signup, "bystander@example.com")).toMatchObject({
-    sent: false,
-  });
+
+  expect(mailsTo(signup, "bystander@example.com")).toBe(
+    SEND_LIMITS.signInPerAddressPerHour,
+  );
 });
 
 test("a link-your-address email counts in the sign-in quota", async () => {
@@ -462,6 +461,7 @@ test.each([0, 0.99])(
     draw(value);
     await db.emailSend.deleteMany();
     await db.user.createMany({
+      skipDuplicates: true,
       data: ["calls-member", "calls-member-capped", "calls-member-ip"].map(
         (name) => ({ email: `${name}@example.com`, approvedAt: new Date() }),
       ),

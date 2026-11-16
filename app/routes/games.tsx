@@ -31,10 +31,6 @@ const INVITE_ERRORS: Record<InviteError, { status: number; error: string }> = {
     status: 429,
     error: `You have ${MAX_PENDING_INVITES} invites waiting. Wait until one is accepted or expires.`,
   },
-  not_sent: {
-    status: 502,
-    error: "The invite email couldn't be sent. Try again in a minute.",
-  },
 };
 
 // POST /games with email=<address> starts a game by invite (#14), or with

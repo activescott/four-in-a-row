@@ -32,7 +32,7 @@ const PREFIX_HEXTETS = 4;
 /**
  * The key a client's sends are counted under: the bare address, with an IPv6
  * address reduced to its /64 (one customer is usually handed a whole /64 and
- * could otherwise rotate through them), an IPv4-mapped one to its IPv4
+ * could otherwise rotate through them), an IPv4-mapped one (dotted or hex) to its IPv4
  * address, and a missing one to a single shared "unknown" bucket.
  */
 export function ipKey(ip: string | null): string {
@@ -54,6 +54,12 @@ export function ipKey(ip: string | null): string {
   if (tail === undefined ? missing !== 0 : missing < 1) return bare;
   const hextets = [...left, ...Array<string>(missing).fill("0"), ...right];
   if (!hextets.every((h) => /^[0-9a-f]{1,4}$/.test(h))) return bare;
+  // IPv4-mapped (::ffff:a.b.c.d) in hex form: ::ffff:102:304 is 1.2.3.4.
+  const values = hextets.map((h) => parseInt(h, 16));
+  if (values.slice(0, 5).every((v) => v === 0) && values[5] === 0xffff) {
+    const [hi = 0, lo = 0] = values.slice(6);
+    return [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff].join(".");
+  }
   const prefix = hextets
     .slice(0, PREFIX_HEXTETS)
     .map((h) => parseInt(h, 16).toString(16));
