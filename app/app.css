@@ -1,1 +1,44 @@
 @import "tailwindcss";
+
+@theme {
+  --font-rounded:
+    ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold",
+    "Hiragino Maru Gothic ProN", Nunito, system-ui, sans-serif;
+  --font-editorial:
+    "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia,
+    serif;
+}
+
+/* Landing concept B: the last disc drops in once, then the winning four is
+   marked. The resting styles are the finished picture, so with
+   prefers-reduced-motion (or no animation support) nothing moves. */
+@media (prefers-reduced-motion: no-preference) {
+  .fiar-drop {
+    animation: fiar-drop 1.3s 0.6s backwards;
+  }
+  .fiar-win {
+    animation: fiar-fade 0.5s 1.9s backwards;
+  }
+}
+@keyframes fiar-drop {
+  0% {
+    transform: translateY(-300px);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.5);
+  }
+  65% {
+    transform: translateY(0);
+    animation-timing-function: ease-out;
+  }
+  80% {
+    transform: translateY(-16px);
+    animation-timing-function: ease-in;
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+@keyframes fiar-fade {
+  from {
+    opacity: 0;
+  }
+}

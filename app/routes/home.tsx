@@ -1,5 +1,7 @@
-import { Link, redirect } from "react-router";
+import { redirect, useSearchParams } from "react-router";
 import { getSession } from "../auth.server";
+import { ConceptA } from "../landing/concept-a";
+import { ConceptB } from "../landing/concept-b";
 import type { Route } from "./+types/home";
 
 export function meta() {
@@ -12,22 +14,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   return null;
 }
 
+// Concept review only: /?concept=b shows direction B, anything else A.
 export default function Home() {
-  return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col items-center justify-center gap-6 p-6 text-center">
-      <h1 className="text-4xl font-bold text-slate-900">Four in a Row</h1>
-      <p className="text-xl text-balance text-slate-700">
-        Take turns with family, from any phone or laptop.
-      </p>
-      <Link
-        to="/login"
-        className="flex min-h-12 w-full items-center justify-center rounded-lg bg-blue-700 px-4 py-3 text-lg font-semibold text-white hover:bg-blue-800 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
-      >
-        Sign in
-      </Link>
-      <p className="-mt-3 text-base text-balance text-slate-600">
-        We'll email you a link or code. No password needed.
-      </p>
-    </main>
-  );
+  const [params] = useSearchParams();
+  return params.get("concept") === "b" ? <ConceptB /> : <ConceptA />;
 }
