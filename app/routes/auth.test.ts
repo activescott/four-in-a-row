@@ -485,6 +485,14 @@ test("a 4th attempt on one code is refused, even with the right code", async () 
   expect(fourth.headers.get("set-cookie") ?? "").not.toMatch(/^session=/m);
 });
 
+test("the page after a refused 4th attempt tells the reader to ask for a new code", async () => {
+  const data = await run(login.loader, get("/login?error=RATE_LIMITED"));
+
+  expect(data).toMatchObject({
+    error: expect.stringMatching(/ask for a new code/i),
+  });
+});
+
 test("an existing account can sign in again", async () => {
   const { response } = await signIn(await member("member@example.com"));
 

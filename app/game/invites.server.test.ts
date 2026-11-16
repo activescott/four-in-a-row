@@ -225,6 +225,8 @@ test("inviting an address with an account and one without looks the same, and do
   // and site-wide caps), for every address alike.
   expect(memberCalls).toContain("Invite.create");
   expect(memberCalls).toContain("User.findUnique");
+  // ...and run the same counts, the cross-IP daily one included.
+  expect(memberCalls.join("\n")).toContain("bucket_day");
   expect(recorded.calls).toEqual(memberCalls);
   expect(forMember).toEqual({ ok: true, gameId: expect.any(String) });
   expect(forStranger).toEqual({ ok: true, gameId: expect.any(String) });

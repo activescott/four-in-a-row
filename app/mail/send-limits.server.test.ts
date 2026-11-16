@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, expect, test, vi } from "vitest";
 import type { PrismaClient } from "../generated/prisma/client";
 import { createLogger } from "../logger.server";
 import { createPgliteDb } from "../pglite.server";
+import { recordDbCalls } from "../test/db-calls";
 import { logCapture } from "../test/routes";
 import {
   bucketKey,
@@ -173,6 +174,64 @@ test("the hourly cap on an address still counts every IP", async () => {
     ok: false,
     reason: "address",
   });
+});
+
+// Rows as if `count` sign-ins had gone out to name+N@host, one per tag and
+// client, a few hours ago, so only the daily cap can bind.
+async function sentToTags(count: number, host: string) {
+  await db.emailSend.createMany({
+    data: Array.from({ length: count }, (_, n) => ({
+      address: `name+${n}@${host}`,
+      bucket: `name@${host}`,
+      kind: "signin",
+      ip: `192.0.2.${n + 1}`,
+      createdAt: new Date(Date.now() - THREE_HOURS),
+    })),
+  });
+}
+
+test("the 25th sign-in request in a day to name+N@x, across tags and IPs, sends nothing", async () => {
+  await sentToTags(SEND_LIMITS.signInPerBucketPerDay - 1, "example.com");
+
+  expect(await send("name+24@example.com", "198.51.100.1")).toEqual({
+    ok: true,
+  });
+  expect(await send("name+25@example.com", "198.51.100.2")).toEqual({
+    ok: false,
+    reason: "address",
+  });
+  expect(await send("name@example.com", "198.51.100.3")).toEqual({
+    ok: false,
+    reason: "address",
+  });
+  // Another inbox, and the same inbox's invites, are not held to it.
+  expect(await send("other+1@example.com", "198.51.100.4")).toEqual({
+    ok: true,
+  });
+  await db.emailSend.deleteMany({ where: { kind: "signin" } });
+  await sentToTags(SEND_LIMITS.signInPerBucketPerDay, "example.com");
+  expect(await send("name+1@example.com", "198.51.100.5", "invite")).toEqual({
+    ok: true,
+  });
+});
+
+test("a send over the daily cap does the same database work as one under it", async () => {
+  const calls = async (address: string) => {
+    const recorded = recordDbCalls(db);
+    await reserveSend(
+      recorded.db,
+      { address, kind: "signin", ip: "198.51.100.7" },
+      logged().logger,
+    );
+    return recorded.calls;
+  };
+  await sentToTags(SEND_LIMITS.signInPerBucketPerDay, "full.example");
+
+  const over = await calls("name+1@full.example");
+  const under = await calls("name+1@empty.example");
+
+  expect(over).toEqual(under);
+  expect(over.join("\n")).toContain("bucket_day");
 });
 
 test("an invite to an address is still held to its daily cap whoever asks", async () => {
