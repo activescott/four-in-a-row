@@ -42,9 +42,9 @@ test("the signed-in header has the title, then an account menu with Profile and 
 });
 
 test("the menu button's name contains the text it shows", () => {
-  const summary = header("alice@example.com").match(
-    /<summary[^>]*>([\s\S]*?)<\/summary>/,
-  )![1]!;
+  const summary = header("alice@example.com")
+    .match(/<summary[^>]*>([\s\S]*?)<\/summary>/)![1]!
+    .replace(/<svg[\s\S]*?<\/svg>/, ""); // the chevron is decoration
   // Nothing visible is hidden from the accessible name.
   expect(summary).not.toContain("aria-hidden");
   expect(summary).toContain(">A<");
@@ -71,7 +71,7 @@ test("the menu's email is wide enough not to break mid-word", () => {
 
 test("the header sits in the same container as the page content", () => {
   const html = header("alice@example.com");
-  expect(html).toMatch(/<header[^>]*><div class="[^"]*max-w-md px-4/);
+  expect(html).toMatch(/<header[^>]*><div class="[^"]*max-w-md[^"]* px-4/);
 });
 
 test("the signed-out header has a Sign in link and no menu", () => {
@@ -119,17 +119,19 @@ const profileData = {
   removal: { status: "idle" },
 };
 
-test("on a phone each sign-in method is a stacked card with a full-width 44px Remove", () => {
+test("each sign-in method is a stacked card at every width (the column is never wider than 28rem), with a full-width 44px Remove", () => {
   const html = render("/profile", Profile, profileData);
   const table = html.match(/<table[^>]*>/)![0];
-  expect(table).toMatch(/max-sm:\[&_tr\]:flex/);
-  expect(table).toMatch(/max-sm:\[&_tr\]:flex-col/);
-  expect(table).toMatch(/max-sm:\[&_tr\]:border/);
+  // Unprefixed: a table does not fit the 28rem column at any viewport.
+  expect(table).toMatch(/[\s"]\[&amp;_tr\]:flex[\s"]/);
+  expect(table).not.toMatch(/sm:table/);
+  expect(table).toMatch(/[\s"]\[&amp;_tr\]:flex-col/);
+  expect(table).toMatch(/[\s"]\[&amp;_tr\]:border[\s"]/);
   const remove = html.match(
     /<button[^>]*data-testid="remove-identity"[^>]*>/,
   )![0];
   expect(remove).toMatch(/min-h-11/);
-  expect(remove).toMatch(/max-sm:w-full/);
+  expect(remove).toMatch(/[\s"]w-full/);
   // The library's inline 24px button style is replaced, not kept.
   expect(remove).not.toContain("style=");
 });
@@ -139,7 +141,7 @@ test("the profile's tap targets are 44px and its grey text is slate-600", () => 
   const add = html.match(/<button[^>]*data-testid="add-passkey"[^>]*>/)![0];
   expect(add).toMatch(/min-h-11/);
   expect(html).toMatch(/<dt[^>]*text-slate-600/);
-  expect(html).toMatch(/<p[^>]*text-slate-600[^>]*>[^<]*passkey/i);
+  expect(html).toMatch(/<p[^>]*text-slate-600[^>]*>Sign in with Touch ID/);
   expect(html).not.toContain("GrayText");
 });
 

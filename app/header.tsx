@@ -39,17 +39,24 @@ function AccountMenu({ email }: { email: string }) {
         menu.current.querySelector("summary")?.focus();
       }}
     >
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-1 [&::-webkit-details-marker]:hidden">
-        <span className="sr-only">Account menu</span>
-        <span className="flex size-9 items-center justify-center rounded-full bg-blue-700 text-lg font-semibold text-white">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg [&::-webkit-details-marker]:hidden">
+        <span className="flex size-11 items-center justify-center rounded-full bg-blue-700 text-lg font-semibold text-white">
           {email.charAt(0).toUpperCase()}
         </span>
-        <span className="hidden max-w-[12rem] truncate text-slate-700 sm:inline">
-          {email}
-        </span>
+        <span className="text-slate-700">Account</span>
+        <svg
+          viewBox="0 0 20 20"
+          className="size-4 text-slate-600"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+        >
+          <path d="m5 8 5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </summary>
-      <div className="absolute right-0 z-10 mt-1 w-56 rounded-lg border border-slate-300 bg-white p-1 shadow-lg">
-        <p className="px-3 py-1 text-sm break-all text-slate-600">{email}</p>
+      <div className="absolute right-0 z-10 mt-1 w-max min-w-[16rem] max-w-[calc(100vw-1rem)] rounded-lg border border-slate-300 bg-white p-1 shadow-lg">
+        <p className="px-3 py-1 text-sm break-words text-slate-600">{email}</p>
         <Link to="/profile" className={item}>
           Profile
         </Link>
@@ -67,7 +74,7 @@ export function Header({ email }: { email: string | null }) {
   const { pathname } = useLocation();
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4">
+      <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4">
         <Link
           to={email ? "/games" : "/"}
           className="flex min-h-11 items-center text-xl font-bold text-slate-900"
