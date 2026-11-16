@@ -472,6 +472,11 @@ test.each([0, 0.99])(
     await sentBefore(SEND_LIMITS.signInPerAddressPerHour, {
       address: "calls-address-capped@example.com",
     });
+    await sentBefore(SEND_LIMITS.signInPerAddressPerDay, {
+      address: "calls-pair-capped@example.com",
+      ip: "203.0.113.34",
+      ageMs: 3 * 60 * 60 * 1000,
+    });
     await sentFromClient(SEND_LIMITS.signInPerIpPerHour, "203.0.113.31");
     await sentBefore(SEND_LIMITS.ipPerDay, {
       address: "calls-someone-else@example.com",
@@ -486,6 +491,15 @@ test.each([0, 0.99])(
       ],
       "player refused by address": [
         "calls-member-capped@example.com",
+        "203.0.113.30",
+      ],
+      "refused by the address's daily cap for this client": [
+        "calls-pair-capped@example.com",
+        "203.0.113.34",
+      ],
+      "sent to a +tag address": ["Calls.Tag+1@gmail.com", "203.0.113.30"],
+      "sent to the same address, untagged": [
+        "calls-tag@gmail.com",
         "203.0.113.30",
       ],
       "refused by sign-in IP cap": [
