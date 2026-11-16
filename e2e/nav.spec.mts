@@ -82,12 +82,18 @@ test("in dark mode the profile page still has a light background", async ({
   const container = page.locator("main > *").first();
   await expect(container).toHaveCSS("color-scheme", "light");
   const lightness = await container.evaluate((el) => {
+    // Reads any CSS colour (Tailwind's are oklch) as 0-255 RGBA via a canvas.
+    const ctx = document.createElement("canvas").getContext("2d")!;
+    const rgba = (color: string) => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 1, 1);
+      return ctx.getImageData(0, 0, 1, 1).data;
+    };
     // The first opaque background from the container up, else the canvas.
     for (let n: Element | null = el; n; n = n.parentElement) {
-      const m = getComputedStyle(n).backgroundColor.match(/[\d.]+/g);
-      if (m && (m.length < 4 || Number(m[3]) > 0)) {
-        return Math.min(...m.slice(0, 3).map(Number));
-      }
+      const [r, g, b, a] = rgba(getComputedStyle(n).backgroundColor);
+      if (a! > 0) return Math.min(r!, g!, b!);
     }
     return 255; // the canvas, which `color-scheme: light` keeps white
   });
