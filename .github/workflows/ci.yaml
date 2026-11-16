@@ -42,6 +42,10 @@ jobs:
         run: npm ci
       - name: Generate Prisma client
         run: npx prisma generate
+      # Prisma's CLI phones home to checkpoint.prisma.io unless told not to;
+      # fails if `prisma generate` still does with CHECKPOINT_DISABLE unset.
+      - name: Check Prisma does not call checkpoint
+        run: npm run check:no-checkpoint
       - name: Typecheck
         run: npm run typecheck
       - name: Lint

@@ -478,3 +478,18 @@ test("the sign-in privacy note groups with the email field and both hints are 16
   );
   expect(html).toMatch(/<p class="[^"]*\btext-base\b[^"]*">First time\?/);
 });
+
+test("the sign-in sent message doesn't say you need an invite", () => {
+  const html = text(
+    render("/login", Login, {
+      sent: true,
+      error: null,
+      redirectTo: null,
+      formToken: "t",
+    }),
+  );
+  expect(html).toContain(
+    "Check your email for a sign-in link and code. It can take a minute, and it may land in spam. If nothing arrives, wait a little and ask again.",
+  );
+  expect(html).not.toMatch(/invite|has played/i);
+});
