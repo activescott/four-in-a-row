@@ -12,8 +12,12 @@ import type { MailKind } from "./mailer.server";
 // up a player's sign-in quota (#59 review). Sign-in includes the "link this
 // address" email, which goes through the same transport.
 export const SEND_LIMITS = {
-  /** Sign-in mail to one address. */
+  /** Sign-in mail to one address, from anyone. */
   signInPerAddressPerHour: 5,
+  /**
+   * Sign-in mail to one address from one client, so a stranger can't use up
+   * the owner's day (#60). The hourly cap above counts every client.
+   */
   signInPerAddressPerDay: 10,
   /** Invites to one address, from anyone. */
   invitePerAddressPerDay: 2,
@@ -29,10 +33,37 @@ export const SEND_LIMITS = {
   retainMs: 2 * 24 * 60 * 60 * 1000,
   /** About one send in this many prunes. */
   pruneOneIn: 20,
+  /** Also pruned at start and this often, so a quiet site keeps its retention. */
+  pruneEveryMs: 24 * 60 * 60 * 1000,
+  /**
+   * Prisma's transaction defaults (2 s and 5 s) are short for a send that
+   * queues on the site lock behind a burst.
+   */
+  transactionMaxWaitMs: 10_000,
+  transactionTimeoutMs: 15_000,
 } as const;
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * The key an address is counted under: lowercased, without a `+tag` in the
+ * local part, and for Gmail without dots in it, since all of those reach one
+ * inbox. Only the key changes, never the address the mail goes to.
+ */
+export function bucketKey(address: string): string {
+  const lower = address.trim().toLowerCase();
+  const at = lower.lastIndexOf("@");
+  if (at < 1) return lower;
+  let local = lower.slice(0, at);
+  const domain = lower.slice(at + 1);
+  const plus = local.indexOf("+");
+  if (plus > 0) local = local.slice(0, plus);
+  if (domain === "gmail.com" || domain === "googlemail.com") {
+    local = local.replaceAll(".", "");
+  }
+  return `${local}@${domain}`;
+}
 
 export type LimitReason = "address" | "ip" | "global" | "error";
 export type SendVerdict = { ok: true } | { ok: false; reason: LimitReason };
@@ -47,6 +78,7 @@ class Refused extends Error {
 type Counts = {
   address_hour: number;
   address_day: number;
+  address_client_day: number;
   client_signin_hour: number;
   client_day: number;
   site_day: number;
@@ -83,6 +115,7 @@ export async function reserveSend(
   logger: Logger = appLogger,
 ): Promise<SendVerdict> {
   const to = address.toLowerCase();
+  const bucket = bucketKey(address);
   const key = ipKey(ip);
   if (kind !== "turn" && key === "unknown") {
     // Turn mail has no client by design. For anything else a missing address
@@ -93,37 +126,34 @@ export async function reserveSend(
   let verdict: SendVerdict;
   let code: unknown;
   try {
-    verdict = await db.$transaction(async (tx): Promise<SendVerdict> => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`email_sends:${to}`}, 0))`;
-      if (kind !== "turn") {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('email_sends:site', 0))`;
-      }
-      const now = Date.now();
-      if (Math.random() < 1 / SEND_LIMITS.pruneOneIn) {
-        // Compared as UTC wall time, as Prisma stores it.
-        const cutoff = new Date(now - SEND_LIMITS.retainMs).toISOString();
-        await tx.$executeRaw`
-          DELETE FROM email_sends WHERE id IN (
-            SELECT id FROM email_sends
-            WHERE created_at < ${cutoff}::timestamp
-            FOR UPDATE SKIP LOCKED)`;
-      }
+    verdict = await db.$transaction(
+      async (tx): Promise<SendVerdict> => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`email_sends:${bucket}`}, 0))`;
+        if (kind !== "turn") {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('email_sends:site', 0))`;
+        }
+        const now = Date.now();
+        if (Math.random() < 1 / SEND_LIMITS.pruneOneIn) {
+          await pruneEmailSends(tx, now);
+        }
 
-      const account =
-        kind === "turn"
-          ? null
-          : await tx.user.findUnique({
-              where: { email: to },
-              select: { approvedAt: true },
-            });
-      const hourSince = new Date(now - HOUR_MS).toISOString();
-      const daySince = new Date(now - DAY_MS).toISOString();
-      const [counts] = await tx.$queryRaw<Counts[]>`
+        const account =
+          kind === "turn"
+            ? null
+            : await tx.user.findUnique({
+                where: { email: to },
+                select: { approvedAt: true },
+              });
+        const hourSince = new Date(now - HOUR_MS).toISOString();
+        const daySince = new Date(now - DAY_MS).toISOString();
+        const [counts] = await tx.$queryRaw<Counts[]>`
         SELECT
-          (count(*) FILTER (WHERE s.address = ${to} AND s.kind = ${kind}
+          (count(*) FILTER (WHERE s.bucket = ${bucket} AND s.kind = ${kind}
             AND s.created_at > ${hourSince}::timestamp))::int AS address_hour,
-          (count(*) FILTER (WHERE s.address = ${to} AND s.kind = ${kind}))::int
+          (count(*) FILTER (WHERE s.bucket = ${bucket} AND s.kind = ${kind}))::int
             AS address_day,
+          (count(*) FILTER (WHERE s.bucket = ${bucket} AND s.kind = ${kind}
+            AND s.ip = ${key}))::int AS address_client_day,
           (count(*) FILTER (WHERE s.kind = 'signin' AND s.ip = ${key}
             AND s.created_at > ${hourSince}::timestamp))::int
             AS client_signin_hour,
@@ -135,18 +165,24 @@ export async function reserveSend(
         LEFT JOIN users u ON u.email = s.address AND u.approved_at IS NOT NULL
         WHERE s.created_at > ${daySince}::timestamp`;
 
-      const decided = decide(kind, counts, Boolean(account?.approvedAt));
-      await tx.emailSend.create({
-        data: {
-          address: to,
-          kind,
-          ip: kind === "turn" ? null : key,
-          createdAt: new Date(now),
-        },
-      });
-      if (!decided.ok) throw new Refused(decided);
-      return decided;
-    });
+        const decided = decide(kind, counts, Boolean(account?.approvedAt));
+        await tx.emailSend.create({
+          data: {
+            address: to,
+            bucket,
+            kind,
+            ip: kind === "turn" ? null : key,
+            createdAt: new Date(now),
+          },
+        });
+        if (!decided.ok) throw new Refused(decided);
+        return decided;
+      },
+      {
+        maxWait: SEND_LIMITS.transactionMaxWaitMs,
+        timeout: SEND_LIMITS.transactionTimeoutMs,
+      },
+    );
   } catch (error) {
     if (error instanceof Refused) {
       verdict = error.verdict;
@@ -179,6 +215,7 @@ function decide(
   const c = counts ?? {
     address_hour: 0,
     address_day: 0,
+    address_client_day: 0,
     client_signin_hour: 0,
     client_day: 0,
     site_day: 0,
@@ -195,7 +232,7 @@ function decide(
     kind === "invite"
       ? c.address_day >= L.invitePerAddressPerDay
       : c.address_hour >= L.signInPerAddressPerHour ||
-        c.address_day >= L.signInPerAddressPerDay
+        c.address_client_day >= L.signInPerAddressPerDay
   ) {
     return refuse("address");
   }
@@ -208,4 +245,43 @@ function decide(
     if (c.site_day >= L.globalPerDay) return refuse("global");
   }
   return { ok: true };
+}
+
+/**
+ * Deletes rows older than the retention. One statement that skips rows
+ * another transaction holds, so it can't wait on, or deadlock with, anything.
+ */
+export async function pruneEmailSends(
+  db: Pick<PrismaClient, "$executeRaw">,
+  now = Date.now(),
+) {
+  // Compared as UTC wall time, as Prisma stores it.
+  const cutoff = new Date(now - SEND_LIMITS.retainMs).toISOString();
+  await db.$executeRaw`
+    DELETE FROM email_sends WHERE id IN (
+      SELECT id FROM email_sends
+      WHERE created_at < ${cutoff}::timestamp
+      FOR UPDATE SKIP LOCKED)`;
+}
+
+/**
+ * Prunes now and then daily, on top of the 1-in-20 draw on sends, so rows
+ * don't outlive the retention on a site too quiet to draw (#60). A failure is
+ * logged and the next run tries again. Returns a function that stops it.
+ */
+export function startEmailSendPruning(
+  db: Pick<PrismaClient, "$executeRaw">,
+  logger: Logger = appLogger,
+) {
+  const run = async () => {
+    try {
+      await pruneEmailSends(db);
+    } catch (err) {
+      logger.error({ event: "email.limit.prune.failed", err });
+    }
+  };
+  void run();
+  const timer = setInterval(() => void run(), SEND_LIMITS.pruneEveryMs);
+  timer.unref();
+  return () => clearInterval(timer);
 }

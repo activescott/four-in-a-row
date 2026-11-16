@@ -45,6 +45,7 @@ async function sentBefore(
   await db.emailSend.createMany({
     data: Array.from({ length: count }, () => ({
       address,
+      bucket: address,
       kind: "signin",
       ip,
       createdAt: new Date(Date.now() - ageMs),

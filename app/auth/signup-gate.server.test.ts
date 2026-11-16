@@ -96,6 +96,7 @@ async function sentFromClient(
   await db.emailSend.createMany({
     data: Array.from({ length: count }, (_, n) => ({
       address: `from-${ip}-${kind}-${n}@example.com`,
+      bucket: `from-${ip}-${kind}-${n}@example.com`,
       kind,
       ip,
       createdAt: new Date(Date.now() - ageMs),
@@ -116,6 +117,7 @@ async function sentBefore(
   await db.emailSend.createMany({
     data: Array.from({ length: count }, () => ({
       address,
+      bucket: address,
       kind,
       ip,
       createdAt: new Date(Date.now() - ageMs),
@@ -197,17 +199,19 @@ test("the 6th sign-in request for one address within an hour sends nothing, answ
   );
 });
 
-test("an address is also held to 10 sign-in mails a day, whatever the hour", async () => {
+test("an address is also held to 10 sign-in mails a day to one client, whatever the hour", async () => {
   const signup = gate();
   await sentBefore(SEND_LIMITS.signInPerAddressPerDay, {
     address: "daily@example.com",
     ageMs: 3 * 60 * 60 * 1000,
   });
 
-  expect(await signInMail(signup, "daily@example.com")).toEqual({
-    answer: true,
-    sent: false,
-  });
+  expect(await signInMail(signup, "daily@example.com", "198.51.100.1")).toEqual(
+    {
+      answer: true,
+      sent: false,
+    },
+  );
   expect(signup.capture.events("email.limit")).toMatchObject([
     { reason: "address" },
   ]);
@@ -286,6 +290,7 @@ test("one client is held to 30 sign-in requests an hour, whoever they are for, a
       { length: SEND_LIMITS.signInPerIpPerHour - 1 },
       (_, n) => ({
         address: `hourly-ip-${n}@example.com`,
+        bucket: `hourly-ip-${n}@example.com`,
         kind: "signin",
         ip,
         createdAt: new Date(Date.now() - 60_000),
@@ -404,6 +409,7 @@ test("the 101st mail a day to addresses without an account sends nothing and log
   await db.emailSend.createMany({
     data: Array.from({ length: SEND_LIMITS.globalPerDay }, (_, n) => ({
       address: `global-earlier-${n}@example.com`,
+      bucket: `global-earlier-${n}@example.com`,
       kind: "signin",
       ip: `192.0.2.${n}`,
       createdAt: new Date(Date.now() - 60_000),
@@ -430,6 +436,7 @@ test("the global cap forgets mail older than a day", async () => {
   await db.emailSend.createMany({
     data: Array.from({ length: SEND_LIMITS.globalPerDay }, (_, n) => ({
       address: `old-${n}@example.com`,
+      bucket: `old-${n}@example.com`,
       kind: "signin",
       ip: `192.0.2.${n}`,
       createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
