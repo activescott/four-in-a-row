@@ -88,9 +88,12 @@ test.each([
   // One trailing dot on the domain is the same domain.
   ["n.a.m.e@gmail.com.", "name@gmail.com"],
   ["name+1@Example.com.", "name@example.com"],
-])("the bucket key of %j is %s after NFKC and trailing-dot handling", (address, key) => {
-  expect(bucketKey(address)).toBe(key);
-});
+])(
+  "the bucket key of %j is %s after NFKC and trailing-dot handling",
+  (address, key) => {
+    expect(bucketKey(address)).toBe(key);
+  },
+);
 
 test("name+1@gmail.com and n.a.m.e@gmail.com share one bucket with name@gmail.com", async () => {
   const variants = [
