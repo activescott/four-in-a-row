@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { displayName } from "./display";
+import { displayName, drawsLabel } from "./display";
 
 test("a name is the part of the address before the @", () => {
   expect(displayName("bob@example.com")).toBe("bob");
@@ -20,4 +20,10 @@ test("the same opponent in several games keeps the short name", () => {
 test("the match ignores case and empty entries", () => {
   expect(displayName("bob@a.com", ["Bob@B.com", null])).toBe("bob@a.com");
   expect(displayName("bob@a.com", [null])).toBe("bob");
+});
+
+test("the draws part of a record is left out at zero", () => {
+  expect(drawsLabel(0)).toBe("");
+  expect(drawsLabel(1)).toBe("1 draw");
+  expect(drawsLabel(3)).toBe("3 draws");
 });
