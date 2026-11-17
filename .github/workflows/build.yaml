@@ -35,6 +35,15 @@ jobs:
             done
             test -d node_modules/@prisma/client || { echo "missing: @prisma/client"; fail=1; }
             exit $fail'
+      # The app no longer migrates at boot; the init container does.
+      - name: Build migrate image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: migrate
+          load: true
+          tags: four-in-a-row-migrate:ci
+          cache-from: type=gha,scope=migrate
       - name: Smoke-test image
         run: |
           set -eu
@@ -43,6 +52,9 @@ jobs:
           docker run -d --name db --network smoke -e POSTGRES_PASSWORD=smoke \
             postgres:17-alpine@sha256:d3244e8ce3f165ee3c93d9c4a4b1d0fe48b3a89e2287b717fdcbbde92d405065
           until docker exec db pg_isready -U postgres -q; do sleep 1; done
+          docker run --rm --network smoke --user 1000:1000 --read-only --tmpfs /tmp \
+            -e DATABASE_URL=postgresql://postgres:smoke@db:5432/postgres \
+            four-in-a-row-migrate:ci
           # Production refuses to boot without these. The values are fakes, and
           # the network has no route out, so no mail can leave.
           docker run -d --name app --network smoke --user 1000:1000 --read-only --tmpfs /tmp \
@@ -70,6 +82,7 @@ jobs:
           if docker exec app printenv E2E_TEST_MODE; then exit 1; fi
           applied=$(docker exec db psql -U postgres -tAc "select count(*) from _prisma_migrations where finished_at is not null")
           test "$applied" = "$(ls -d prisma/migrations/*/ | wc -l)"
+          if docker logs app 2>&1 | grep -qi 'migrat'; then echo "app migrated at boot"; exit 1; fi
           test "$(status /ops/health/liveness)" = 200
           test "$(status /ops/health/readiness)" = 200
           # Without E2E_TEST_MODE the captured-email readback does not exist,
