@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.3.0...four-in-a-row-v0.3.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* tag-aware daily sign-in cap and a clearer retry message ([#77](https://github.com/activescott/four-in-a-row/issues/77)) ([e5bab6d](https://github.com/activescott/four-in-a-row/commit/e5bab6d759b880261d6a368fc6920e6ce2a180cb))
+
 ## [0.3.0](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.2.0...four-in-a-row-v0.3.0) (2026-11-16)
 
 
