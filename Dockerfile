@@ -11,6 +11,19 @@ RUN npm ci
 COPY . .
 RUN npx prisma generate && npm run build && npm prune --omit=dev
 
+# Init container image: the Prisma CLI and the migrations, nothing else.
+FROM base AS migrate
+ENV NODE_ENV=production \
+  CHECKPOINT_DISABLE=1 \
+  PRISMA_HIDE_UPDATE_MESSAGE=1
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY prisma.config.mts ./
+COPY prisma ./prisma
+USER node
+ENTRYPOINT ["node_modules/.bin/prisma", "migrate", "deploy"]
+
+# Last stage, so it stays the default target.
 FROM base
 ENV NODE_ENV=production \
   PORT=3000 \
