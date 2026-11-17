@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.4.0...four-in-a-row-v0.5.0) (2026-11-17)
+
+
+### Features
+
+* head-to-head record on Your games and the game page ([#88](https://github.com/activescott/four-in-a-row/issues/88)) ([c3ddf2f](https://github.com/activescott/four-in-a-row/commit/c3ddf2f2bd9394e072bdbf1cc0f8dc3536fdd43b))
+
 ## [0.4.0](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.3.1...four-in-a-row-v0.4.0) (2026-11-17)
 
 
