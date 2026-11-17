@@ -24,6 +24,17 @@ jobs:
           tags: four-in-a-row:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Assert the app image has no Prisma CLI
+        run: |
+          # The migrate image carries the CLI; the app image must not.
+          docker run --rm --entrypoint sh four-in-a-row:ci -c '
+            fail=0
+            for p in node_modules/@prisma/studio-core node_modules/@prisma/dev \
+                node_modules/prisma node_modules/.bin/prisma; do
+              if [ -e "$p" ]; then echo "present: $p"; fail=1; fi
+            done
+            test -d node_modules/@prisma/client || { echo "missing: @prisma/client"; fail=1; }
+            exit $fail'
       - name: Smoke-test image
         run: |
           set -eu
