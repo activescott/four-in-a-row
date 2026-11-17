@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, expect, test, vi } from "vitest";
 import type { PrismaClient } from "../generated/prisma/client";
 import { createLogger } from "../logger.server";
 import { createPgliteDb } from "../pglite.server";
+import { recordDbCalls } from "../test/db-calls";
 import { logCapture } from "../test/routes";
 import {
   bucketKey,
@@ -62,7 +63,7 @@ test.each([
   ["name+a+b@example.com", "name@example.com"],
   ["name+1@gmail.com", "name@gmail.com"],
   ["n.a.m.e@gmail.com", "name@gmail.com"],
-  ["N.a.M.e+news@googlemail.com", "name@googlemail.com"],
+  ["N.a.M.e+news@googlemail.com", "name@gmail.com"],
   // Dots count everywhere but Gmail.
   ["n.a.m.e@example.com", "n.a.m.e@example.com"],
   // Nothing left of the local part to key on: leave it alone.
@@ -72,13 +73,36 @@ test.each([
 });
 
 test.each([
-  // A quoted local part may contain "+" and "."; it is not tag-stripped.
-  ['"a+b"@x.com', '"a+b"@x.com'],
-  ['"A+B"@Gmail.com', '"a+b"@gmail.com'],
-  ['"n.a"@gmail.com', '"n.a"@gmail.com'],
-])("a quoted local part is only lowercased: %s", (address, key) => {
+  ['"victim+1"@example.com', "victim@example.com"],
+  ['"victim+2"@example.com', "victim@example.com"],
+  ['"v.i.c.t.i.m"@gmail.com', "victim@gmail.com"],
+  ['"V.ictim+x"@Gmail.com', "victim@gmail.com"],
+])("a quoted local part of atom characters is unquoted: %s", (address, key) => {
   expect(bucketKey(address)).toBe(key);
 });
+
+test.each([
+  ["x@googlemail.com", "x@gmail.com"],
+  ["X@GoogleMail.com", "x@gmail.com"],
+  ["x@googlemail.com.", "x@gmail.com"],
+  ["x+1@googlemail.com", "x@gmail.com"],
+  ["x.y@googlemail.com", "xy@gmail.com"],
+  ["x.y+news@googlemail.com", "xy@gmail.com"],
+  ['"x.y+news"@googlemail.com', "xy@gmail.com"],
+])("googlemail.com shares the gmail.com bucket: %s", (address, key) => {
+  expect(bucketKey(address)).toBe(key);
+  expect(bucketKey(address)).toBe(bucketKey(key));
+});
+
+test.each([
+  ['"a b"@example.com', '"a b"@example.com'],
+  ['"a@b"@example.com', '"a@b"@example.com'],
+])(
+  "a quoted local part that needs its quotes keeps them: %s",
+  (address, key) => {
+    expect(bucketKey(address)).toBe(key);
+  },
+);
 
 test.each([
   // NFKC folds compatibility forms (fullwidth, Kelvin sign) before lowercasing.
@@ -94,6 +118,80 @@ test.each([
     expect(bucketKey(address)).toBe(key);
   },
 );
+
+test.each([
+  // Unicode and punycode spellings of one domain share a key.
+  ["name@b\u00FCcher.de", "name@xn--bcher-kva.de"],
+  ["name@B\u00DCCHER.de", "name@xn--bcher-kva.de"],
+  ["name@xn--bcher-kva.de", "name@xn--bcher-kva.de"],
+  // U+3002 is a dot, and a soft hyphen is dropped.
+  ["name@example\u3002com", "name@example.com"],
+  ["name@exam\u00ADple.com", "name@example.com"],
+  ["name@b\u00FCcher\u3002de.", "name@xn--bcher-kva.de"],
+])("the domain of %j is keyed in its ASCII form: %s", (address, key) => {
+  expect(bucketKey(address)).toBe(key);
+});
+
+// Through reserveSend, so the key that is counted is the one that is checked.
+async function fillBucket(bucket: string) {
+  await db.emailSend.createMany({
+    data: Array.from({ length: SEND_LIMITS.signInPerBucketPerDay }, (_, n) => ({
+      address: `x${n}@example.com`,
+      bucket,
+      kind: "signin",
+      ip: `192.0.2.${n + 1}`,
+      createdAt: new Date(Date.now() - THREE_HOURS),
+    })),
+  });
+}
+
+test("reserveSend: gmail.com and googlemail.com spellings share one daily cap", async () => {
+  await fillBucket("victim@gmail.com");
+  for (const address of [
+    "victim@googlemail.com",
+    "v.i.c.t.i.m+x@googlemail.com",
+    "victim@gmail.com",
+  ]) {
+    expect(await send(address, "198.51.100.1")).toEqual({
+      ok: false,
+      reason: "address",
+    });
+  }
+});
+
+test("reserveSend: a quoted spelling shares the cap of the plain address", async () => {
+  await fillBucket("victim@example.com");
+  expect(await send('"victim+1"@example.com', "198.51.100.1")).toEqual({
+    ok: false,
+    reason: "address",
+  });
+});
+
+test("reserveSend: an IDN domain shares the cap with its punycode form", async () => {
+  await fillBucket("victim@xn--bcher-kva.de");
+  expect(await send("victim@b\u00FCcher.de", "198.51.100.1")).toEqual({
+    ok: false,
+    reason: "address",
+  });
+});
+
+test.each([
+  "victim(c1)@example.com",
+  "(c)victim@example.com",
+  "victim@example.com(x)",
+  '"v\\ictim"@example.com',
+  '"vic".tim@example.com',
+])("reserveSend refuses %s and records nothing", async (address) => {
+  expect(await send(address, "198.51.100.1")).toEqual({
+    ok: false,
+    reason: "address",
+  });
+  expect(await db.emailSend.count()).toBe(0);
+  for (const kind of ["invite", "turn"] as const) {
+    expect((await send(address, null, kind)).ok).toBe(false);
+  }
+  expect(await db.emailSend.count()).toBe(0);
+});
 
 test("name+1@gmail.com and n.a.m.e@gmail.com share one bucket with name@gmail.com", async () => {
   const variants = [
@@ -173,6 +271,66 @@ test("the hourly cap on an address still counts every IP", async () => {
     ok: false,
     reason: "address",
   });
+});
+
+// Rows as if `count` sign-ins had gone out to name+N@host, one per tag and
+// client, a few hours ago, so only the daily cap can bind.
+async function sentToTags(count: number, host: string) {
+  await db.emailSend.createMany({
+    data: Array.from({ length: count }, (_, n) => ({
+      address: `name+${n}@${host}`,
+      bucket: `name@${host}`,
+      kind: "signin",
+      ip: `192.0.2.${n + 1}`,
+      createdAt: new Date(Date.now() - THREE_HOURS),
+    })),
+  });
+}
+
+test("the 25th sign-in request in a day to name+N@x, across tags and IPs, sends nothing", async () => {
+  await sentToTags(SEND_LIMITS.signInPerBucketPerDay - 1, "example.com");
+
+  expect(await send("name+24@example.com", "198.51.100.1")).toEqual({
+    ok: true,
+  });
+  expect(await send("name+25@example.com", "198.51.100.2")).toEqual({
+    ok: false,
+    reason: "address",
+  });
+  expect(await send("name@example.com", "198.51.100.3")).toEqual({
+    ok: false,
+    reason: "address",
+  });
+  // Another inbox, and the same inbox's invites, are not held to it.
+  expect(await send("other+1@example.com", "198.51.100.4")).toEqual({
+    ok: true,
+  });
+  await db.emailSend.deleteMany({ where: { kind: "signin" } });
+  await sentToTags(SEND_LIMITS.signInPerBucketPerDay, "example.com");
+  expect(await send("name+1@example.com", "198.51.100.5", "invite")).toEqual({
+    ok: true,
+  });
+});
+
+test("a send over the daily cap does the same database work as one under it", async () => {
+  // Pin the 1-in-20 prune, which would add a statement to one side only.
+  const calls = async (address: string) => {
+    const recorded = recordDbCalls(db);
+    await reserveSend(
+      recorded.db,
+      { address, kind: "signin", ip: "198.51.100.7" },
+      logged().logger,
+      { shouldPrune: () => false },
+    );
+    return recorded.calls;
+  };
+  await sentToTags(SEND_LIMITS.signInPerBucketPerDay, "full.example");
+
+  const over = await calls("name+1@full.example");
+  const under = await calls("name+1@empty.example");
+
+  expect(over).toEqual(under);
+  expect(over.join("\n")).toContain("bucket_day");
 });
 
 test("an invite to an address is still held to its daily cap whoever asks", async () => {
