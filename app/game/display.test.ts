@@ -24,6 +24,6 @@ test("the match ignores case and empty entries", () => {
 
 test("the draws part of a record is left out at zero", () => {
   expect(drawsLabel(0)).toBe("");
-  expect(drawsLabel(1)).toBe("1 draw");
-  expect(drawsLabel(3)).toBe("3 draws");
+  expect(drawsLabel(1)).toBe("1\u00a0draw");
+  expect(drawsLabel(3)).toBe("3\u00a0draws");
 });

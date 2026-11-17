@@ -118,8 +118,8 @@ test("A invites B by email and they play to a win, live on both boards", async (
   await expect(a.getByText("You won!")).toBeVisible();
   await expect(b.getByText("You lost.")).toBeVisible();
   // The record updates on both boards, the watcher's included, with no reload.
-  await expect(a.getByText(`You 1 – 0 ${name(emailB)}`)).toBeVisible();
-  await expect(b.getByText(`You 0 – 1 ${name(emailA)}`)).toBeVisible();
+  await expect(a.getByText(`You 1 · ${name(emailB)} 0`)).toBeVisible();
+  await expect(b.getByText(`You 0 · ${name(emailA)} 1`)).toBeVisible();
   for (const page of [a, b]) {
     expect(
       await page.evaluate(() => (window as { e2eLoaded?: boolean }).e2eLoaded),

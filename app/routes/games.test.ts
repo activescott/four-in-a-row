@@ -599,6 +599,40 @@ test("the list and the board show your record with each opponent, finished games
   expect(theirs.body.record).toEqual({ won: 1, lost: 2, drawn: 1 });
 });
 
+test("the list puts each opponent's record on that opponent's newest game only", async () => {
+  const me = await player("me");
+  const jo = await player("jo");
+  const cy = await player("cy");
+  await finishedGame(me, jo, me);
+  await finishedGame(cy, me, cy);
+  await new Promise((r) => setTimeout(r, 5));
+  await finishedGame(jo, me, jo);
+  const open = await db.game.create({
+    data: {
+      playerOneId: me.id,
+      playerTwoId: jo.id,
+      status: "ACTIVE",
+      nextPlayerId: jo.id,
+    },
+  });
+  const list = (await reply(
+    await run(games.loader, get("/games", { cookie: me.cookie })),
+  )) as {
+    body: { games: { id: string; opponent: string; record: unknown }[] };
+  };
+  const rows = list.body.games;
+  expect(rows).toHaveLength(4);
+  const withRecord = rows.filter((g) => g.record !== null);
+  expect(withRecord.map((g) => g.opponent).sort()).toEqual(
+    [cy.email, jo.email].sort(),
+  );
+  // jo's newest game is the open one, even though it is unfinished.
+  expect(withRecord.find((g) => g.opponent === jo.email)).toMatchObject({
+    id: open.id,
+    record: { won: 1, lost: 1, drawn: 0 },
+  });
+});
+
 test("a record counts a game as soon as it finishes", async () => {
   const { one, two, game } = await activeGame();
   const record = async (as: Player) =>
