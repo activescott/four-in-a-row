@@ -206,9 +206,13 @@ export async function listGames(db: PrismaClient, userId: string) {
   const users = await db.user.findMany({ where: { id: { in: opponentIds } } });
   const emails = new Map(users.map((u) => [u.id, u.email]));
   const records = await recordsFor(db, userId);
+  // Games are newest first, so the first row seen for an opponent is their newest.
+  const shown = new Set<string>();
   const rows = games.map((game) => {
     const opponentId =
       game.playerOneId === userId ? game.playerTwoId : game.playerOneId;
+    const first = opponentId !== null && !shown.has(opponentId);
+    if (opponentId) shown.add(opponentId);
     return {
       id: game.id,
       status: game.status,
@@ -217,7 +221,7 @@ export async function listGames(db: PrismaClient, userId: string) {
       invited: invitedEmail(game, userId),
       yourTurn: game.nextPlayerId === userId,
       result: resultFor(game, userId),
-      record: (opponentId && records.get(opponentId)) || null,
+      record: (first && records.get(opponentId)) || null,
     };
   });
   // Array.sort is stable, so the newest-first order holds inside each group.

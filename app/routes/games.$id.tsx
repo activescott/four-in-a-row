@@ -229,7 +229,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
 
       {record && !recordStale && (
         <p data-record className="-mt-2 text-xl font-semibold text-slate-900">
-          You {record.won} – {record.lost} <Wrappable text={opponentName} />
+          You {record.won} · <Wrappable text={opponentName} /> {record.lost}
           {record.drawn > 0 && ` · ${drawsLabel(record.drawn)}`}
         </p>
       )}
