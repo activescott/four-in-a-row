@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.3.1...four-in-a-row-v0.4.0) (2026-11-17)
+
+
+### Features
+
+* publish a migrate image for an init container ([#85](https://github.com/activescott/four-in-a-row/issues/85)) ([8ef9ef5](https://github.com/activescott/four-in-a-row/commit/8ef9ef52eb1b04629f7381b202fe55fdc7109bee))
+
 ## [0.3.1](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.3.0...four-in-a-row-v0.3.1) (2026-11-17)
 
 
