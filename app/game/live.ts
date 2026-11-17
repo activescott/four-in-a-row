@@ -131,6 +131,15 @@ export function isLive(state: GameState) {
   return state.status === "ACTIVE" || state.status === "INVITED";
 }
 
+/**
+ * Whether the head-to-head record that came with `loaded` still describes the
+ * game on screen. The record counts finished games, so once the polled game
+ * has finished and the loaded one has not, it is a game behind.
+ */
+export function recordIsCurrent(live: GameState, loaded: GameState) {
+  return live.result === null || loaded.result !== null;
+}
+
 /** Why polling stopped: the game is gone, or the session expired. */
 export type PollEnd = "gone" | "signed_out";
 

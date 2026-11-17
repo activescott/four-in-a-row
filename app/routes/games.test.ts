@@ -540,6 +540,143 @@ test("the game list shows each player whose turn it is and the result", async ()
   expect((await list(await player("loner"))).body.games).toEqual([]);
 });
 
+async function finishedGame(
+  first: Player,
+  second: Player,
+  winner: Player | null,
+) {
+  return db.game.create({
+    data: {
+      playerOneId: first.id,
+      playerTwoId: second.id,
+      status: winner ? "WON" : "DRAW",
+      winnerId: winner?.id ?? null,
+      nextPlayerId: null,
+      finishedAt: new Date(),
+    },
+  });
+}
+
+test("the list and the board show your record with each opponent, finished games only", async () => {
+  const me = await player("me");
+  const jo = await player("jo");
+  const cy = await player("cy");
+  await finishedGame(me, jo, me);
+  await finishedGame(jo, me, me);
+  await finishedGame(jo, me, jo);
+  await finishedGame(me, jo, null);
+  await finishedGame(cy, me, cy);
+  await finishedGame(jo, cy, jo); // not yours
+  const open = await db.game.create({
+    data: {
+      playerOneId: me.id,
+      playerTwoId: jo.id,
+      status: "ACTIVE",
+      nextPlayerId: me.id,
+    },
+  });
+
+  const list = (await reply(
+    await run(games.loader, get("/games", { cookie: me.cookie })),
+  )) as { body: { games: { opponent: string; record: unknown }[] } };
+  const byOpponent = (email: string) =>
+    list.body.games.find((g) => g.opponent === email)?.record;
+  expect(byOpponent(jo.email)).toEqual({ won: 2, lost: 1, drawn: 1 });
+  expect(byOpponent(cy.email)).toEqual({ won: 0, lost: 1, drawn: 0 });
+
+  const page = (await reply(
+    await run(board.loader, get(`/games/${open.id}`, { cookie: me.cookie }), {
+      id: open.id,
+    }),
+  )) as { body: { record: unknown } };
+  expect(page.body.record).toEqual({ won: 2, lost: 1, drawn: 1 });
+
+  const theirs = (await reply(
+    await run(board.loader, get(`/games/${open.id}`, { cookie: jo.cookie }), {
+      id: open.id,
+    }),
+  )) as { body: { record: unknown } };
+  expect(theirs.body.record).toEqual({ won: 1, lost: 2, drawn: 1 });
+});
+
+test("the list puts each opponent's record on that opponent's newest game only", async () => {
+  const me = await player("me");
+  const jo = await player("jo");
+  const cy = await player("cy");
+  await finishedGame(me, jo, me);
+  await finishedGame(cy, me, cy);
+  await new Promise((r) => setTimeout(r, 5));
+  await finishedGame(jo, me, jo);
+  const open = await db.game.create({
+    data: {
+      playerOneId: me.id,
+      playerTwoId: jo.id,
+      status: "ACTIVE",
+      nextPlayerId: jo.id,
+    },
+  });
+  const list = (await reply(
+    await run(games.loader, get("/games", { cookie: me.cookie })),
+  )) as {
+    body: { games: { id: string; opponent: string; record: unknown }[] };
+  };
+  const rows = list.body.games;
+  expect(rows).toHaveLength(4);
+  const withRecord = rows.filter((g) => g.record !== null);
+  expect(withRecord.map((g) => g.opponent).sort()).toEqual(
+    [cy.email, jo.email].sort(),
+  );
+  // jo's newest game is the open one, even though it is unfinished.
+  expect(withRecord.find((g) => g.opponent === jo.email)).toMatchObject({
+    id: open.id,
+    record: { won: 1, lost: 1, drawn: 0 },
+  });
+});
+
+test("a record counts a game as soon as it finishes", async () => {
+  const { one, two, game } = await activeGame();
+  const record = async (as: Player) =>
+    (
+      (await reply(
+        await run(
+          board.loader,
+          get(`/games/${game.id}`, { cookie: as.cookie }),
+          { id: game.id },
+        ),
+      )) as { body: { record: unknown } }
+    ).body.record;
+  expect(await record(one)).toBeNull();
+  await playToWin(one, two, game.id);
+  expect(await record(one)).toEqual({ won: 1, lost: 0, drawn: 0 });
+  expect(await record(two)).toEqual({ won: 0, lost: 1, drawn: 0 });
+});
+
+test("a player never sees a record they are not part of", async () => {
+  const a = await player("a");
+  const b = await player("b");
+  const c = await player("c");
+  await finishedGame(a, b, a);
+  await finishedGame(a, c, c);
+  const list = (await reply(
+    await run(games.loader, get("/games", { cookie: c.cookie })),
+  )) as { body: { games: { opponent: string; record: unknown }[] } };
+  expect(list.body.games).toHaveLength(1);
+  expect(list.body.games[0]).toMatchObject({
+    opponent: a.email,
+    record: { won: 1, lost: 0, drawn: 0 },
+  });
+  expect(JSON.stringify(list.body)).not.toContain(b.email);
+  const bGame = await db.game.findFirstOrThrow({
+    where: { playerOneId: a.id, playerTwoId: b.id },
+  });
+  const peek = await reply(
+    await run(board.loader, get(`/games/${bGame.id}`, { cookie: c.cookie }), {
+      id: bGame.id,
+    }),
+  );
+  expect(peek.status).toBe(404);
+});
+
 test("the inviter's list and board show whom a waiting game's invite went to", async () => {
   const one = await player("inviter");
   const game = await db.game.create({

@@ -8,10 +8,11 @@ import {
   invitedEmailFor,
   listGames,
   playerEmails,
+  recordForGame,
 } from "../game/games.server";
-import { displayName } from "../game/display";
+import { displayName, drawsLabel } from "../game/display";
 import { Wrappable } from "../game/wrappable";
-import { useLiveGame } from "../game/live";
+import { recordIsCurrent, useLiveGame } from "../game/live";
 import { COLUMNS, ROWS, type Player } from "../game/rules";
 import type { Route } from "./+types/games.$id";
 import type { action as moveAction } from "./games.$id.moves";
@@ -29,6 +30,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     game: gameState(game, user.id),
     emails: await playerEmails(db, game),
     invitedEmail: await invitedEmailFor(db, game, user.id),
+    // Your finished games against this opponent; null before the first.
+    record: await recordForGame(db, game, user.id),
     // Everyone the user plays, so two with one name can be told apart.
     opponents: (await listGames(db, user.id)).map(
       (g) => g.opponent ?? g.invited,
@@ -117,7 +120,7 @@ function Star({ className }: { className: string }) {
 }
 
 export default function Board({ loaderData }: Route.ComponentProps) {
-  const { emails, opponents } = loaderData;
+  const { emails, opponents, record } = loaderData;
   const { game, ended } = useLiveGame(loaderData.game);
   const fetcher = useFetcher<typeof moveAction>();
   const opponent: Player = game.you === 1 ? 2 : 1;
@@ -138,6 +141,14 @@ export default function Board({ loaderData }: Route.ComponentProps) {
     void revalidate();
   }, [joined, game.id, revalidate]);
   const finished = game.result !== null;
+  // The poll saw the game finish: reload once for the record that includes it.
+  const recordStale = !recordIsCurrent(game, loaderData.game);
+  const recordFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!recordStale || recordFor.current === game.id) return;
+    recordFor.current = game.id;
+    void revalidate();
+  }, [recordStale, game.id, revalidate]);
   const canMove = game.yourTurn && fetcher.state === "idle";
   const winning = new Set(game.winningCells.map((c) => `${c.row}:${c.column}`));
   const last = game.lastMove;
@@ -215,6 +226,13 @@ export default function Board({ loaderData }: Route.ComponentProps) {
         </Link>
       </nav>
       <h1 className="-mt-2 text-2xl font-bold text-slate-900">Four in a Row</h1>
+
+      {record && !recordStale && (
+        <p data-record className="-mt-2 text-xl font-semibold text-slate-900">
+          You {record.won} · <Wrappable text={opponentName} /> {record.lost}
+          {record.drawn > 0 && ` · ${drawsLabel(record.drawn)}`}
+        </p>
+      )}
 
       {invitedEmail && (
         <p
