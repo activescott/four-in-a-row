@@ -26,5 +26,5 @@ test("a 4th wrong sign-in code lands on /login asking for a new one", async ({
   }
 
   expect(new URL(page.url()).pathname).toBe("/login");
-  await expect(page.getByText("Ask for a new code")).toBeVisible();
+  await expect(page.getByText("Ask for a new one")).toBeVisible();
 });
