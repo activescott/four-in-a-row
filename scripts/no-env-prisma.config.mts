@@ -3,4 +3,4 @@
 // never loaded the repo's config (another cwd, or a checkout from before it did).
 import { defineConfig } from "prisma/config";
 
-export default defineConfig({ schema: "prisma/schema.prisma" });
+export default defineConfig({ schema: "../prisma/schema.prisma" });
