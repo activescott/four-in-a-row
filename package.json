@@ -14,6 +14,7 @@
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
+    "prisma": "CHECKPOINT_DISABLE=1 prisma",
     "check:no-checkpoint": "node scripts/check-no-checkpoint.mjs"
   },
   "dependencies": {

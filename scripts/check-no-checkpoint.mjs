@@ -1,11 +1,31 @@
 // Fails if the Prisma CLI calls checkpoint.prisma.io (its telemetry/version check).
-// Runs the given command (default: `npx prisma generate`) with CHECKPOINT_DISABLE
-// unset, behind a local proxy that logs and refuses every CONNECT/HTTP request.
+// Runs the given command (default: every Prisma entry point the repo documents,
+// see DEFAULTS) with CHECKPOINT_DISABLE unset, behind a local proxy that logs and
+// refuses every CONNECT/HTTP request.
 import { spawn } from "node:child_process";
 import http from "node:http";
 
-const cmd = process.argv.slice(2);
-if (cmd.length === 0) cmd.push("npx", "prisma", "generate");
+// `npm run prisma` is the documented way to run the CLI: npm runs it from the
+// repo root whatever the cwd, so it must stay quiet even from a subdirectory.
+const DEFAULTS = [
+  ["npx", "prisma", "generate"],
+  ["npx", "prisma", "validate"],
+  ["npx", "prisma", "version"],
+  ["npm", "run", "prisma", "--", "version"],
+  ["sh", "-c", "cd app && npm run prisma -- validate"],
+  // The same without prisma.config.mts, so only the npm script can set the env.
+  [
+    "npm",
+    "run",
+    "prisma",
+    "--",
+    "validate",
+    "--config",
+    "scripts/no-env-prisma.config.mts",
+  ],
+];
+const argv = process.argv.slice(2);
+const commands = argv.length ? [argv] : DEFAULTS;
 
 const hosts = [];
 const proxy = http.createServer((req, res) => {
@@ -67,31 +87,31 @@ if (!hosts.some((h) => h.includes(CANARY_HOST))) {
   process.exit(1);
 }
 
-const { code, signal, timedOut } = await run(cmd);
-// Give a detached child a moment to finish a late request.
-await new Promise((resolve) => setTimeout(resolve, 1000));
+let failed = false;
+for (const cmd of commands) {
+  console.log(`\n$ ${cmd.join(" ")}`);
+  const { code, signal, timedOut } = await run(cmd);
+  // Give a detached child a moment to finish a late request.
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  const seen = hosts.splice(0);
+  console.log(
+    `proxy saw: ${seen.length ? [...new Set(seen)].join(", ") : "(nothing)"}`,
+  );
+  const problem = seen.some((h) => /checkpoint\.prisma\.io/.test(h))
+    ? "contacted checkpoint.prisma.io"
+    : timedOut
+      ? `timed out after ${TIMEOUT_MS / 1000}s and was killed`
+      : signal
+        ? `was killed by ${signal}`
+        : code !== 0
+          ? `exited ${code}`
+          : null;
+  if (problem) {
+    console.error(`FAIL: \`${cmd.join(" ")}\` ${problem}`);
+    failed = true;
+  }
+}
 proxy.close();
 proxy.closeAllConnections();
-
-console.log(
-  `\nproxy saw: ${hosts.length ? [...new Set(hosts)].join(", ") : "(nothing)"}`,
-);
-if (hosts.some((h) => /checkpoint\.prisma\.io/.test(h))) {
-  console.error(`FAIL: \`${cmd.join(" ")}\` contacted checkpoint.prisma.io`);
-  process.exit(1);
-}
-if (timedOut) {
-  console.error(
-    `FAIL: \`${cmd.join(" ")}\` timed out after ${TIMEOUT_MS / 1000}s and was killed`,
-  );
-  process.exit(1);
-}
-if (signal) {
-  console.error(`FAIL: \`${cmd.join(" ")}\` was killed by ${signal}`);
-  process.exit(1);
-}
-if (code !== 0) {
-  console.error(`FAIL: \`${cmd.join(" ")}\` exited ${code}`);
-  process.exit(code);
-}
+if (failed) process.exit(1);
 console.log("ok: checkpoint.prisma.io was not contacted");
