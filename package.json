@@ -1,10 +1,10 @@
 {
   "name": "four-in-a-row",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=24 <27"
   },
   "scripts": {
     "dev": "PGLITE_DIR=pglite-data react-router dev",
@@ -15,7 +15,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "prisma": "CHECKPOINT_DISABLE=1 prisma",
-    "check:no-checkpoint": "node scripts/check-no-checkpoint.mjs"
+    "check:no-checkpoint": "node scripts/check-no-checkpoint.mjs",
+    "check:playwright-image": "node scripts/check-playwright-image.mjs"
   },
   "dependencies": {
     "@activescott/auth": "^6.0.0",

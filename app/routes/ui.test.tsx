@@ -7,6 +7,7 @@ import Board from "./games.$id";
 import Games from "./games";
 import Invite from "./invite.$key";
 import Login from "./login";
+import { signInEmail } from "../mail/templates";
 
 // Renders a route component the way React Router would with this loader data.
 function render(path: string, Component: unknown, loaderData: unknown) {
@@ -339,8 +340,15 @@ test("the invite page explains the sign-in email and posts to itself, without th
 
 test("after sending, the invite page says what to do with the email and labels the code", () => {
   const html = render("/invite/:id", Invite, { ...pending, sent: true });
+  // The subject line is what people scan their inbox for, so quote it from
+  // the template, not from a copy of the string.
+  const { subject } = signInEmail({
+    to: "b@example.com",
+    link: "https://example.com/x",
+    minutes: 5,
+  });
   expect(html).toContain(
-    "Open the email we just sent, “Sign in to Four in a Row”, and tap the link, or type the 6-digit code here.",
+    `Open the email we just sent, “${subject}”, and tap the link, or type the 6-digit code here.`,
   );
   expect(html).toMatch(/<label for="code"[^>]*>6-digit code<\/label>/);
   expect(html).toMatch(
