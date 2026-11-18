@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.5.0...four-in-a-row-v0.5.1) (2026-11-18)
+
+
+### Miscellaneous Chores
+
+* release 0.5.1 ([#92](https://github.com/activescott/four-in-a-row/issues/92)) ([9f2ca79](https://github.com/activescott/four-in-a-row/commit/9f2ca791c56a7feaf825d6fabf31a51afdcfeab5))
+
 ## [0.5.0](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.4.0...four-in-a-row-v0.5.0) (2026-11-17)
 
 
