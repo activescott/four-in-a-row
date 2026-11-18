@@ -1,4 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>activescott/.github"]
+  "extends": ["github>activescott/.github"],
+  "packageRules": [
+    {
+      "description": "The e2e job runs in the Playwright image, whose tag must equal the @playwright/test version in package-lock.json (scripts/check-playwright-image.mjs fails CI otherwise), so Renovate bumps both in one PR. Listed here, after the shared preset's rules, so it wins over the all-non-major group.",
+      "matchPackageNames": ["@playwright/test", "mcr.microsoft.com/playwright"],
+      "groupName": "playwright",
+      "groupSlug": "playwright"
+    }
+  ]
 }
