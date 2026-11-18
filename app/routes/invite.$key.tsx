@@ -10,6 +10,7 @@ import { getDb } from "../db.server";
 import { displayName, maskEmail } from "../game/display";
 import { acceptInvite, inviteByToken } from "../game/invites.server";
 import { CONTROL_BORDER } from "../controls";
+import { SIGN_IN_SUBJECT } from "../mail/templates";
 import type { Route } from "./+types/invite.$key";
 
 export function meta() {
@@ -220,8 +221,7 @@ export default function Invite({ loaderData }: Route.ComponentProps) {
           className="flex flex-col gap-3"
         >
           <p role="status" className="text-lg text-green-800">
-            Open the email we just sent, “Sign in to Four in a Row”, and tap the
-            link, or type the 6-digit code here.
+            {`Open the email we just sent, “${SIGN_IN_SUBJECT}”, and tap the link, or type the 6-digit code here.`}
           </p>
           <label htmlFor="code" className="text-slate-800">
             6-digit code

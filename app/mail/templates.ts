@@ -3,6 +3,9 @@ import type { Mail } from "./mailer.server";
 
 const APP = "Four in a Row";
 
+/** The sign-in email's subject line; pages that point at the email quote it. */
+export const SIGN_IN_SUBJECT = `Your sign-in link for ${APP}`;
+
 function escape(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -84,7 +87,7 @@ type Purpose = "sign-in" | "link";
 // What differs between the two mails the auth library sends through the
 // transport; layout and the expiry sentence are shared.
 const SIGN_IN_COPY = {
-  subject: `Your sign-in link for ${APP}`,
+  subject: SIGN_IN_SUBJECT,
   heading: `Sign in to ${APP}`,
   lede: `sign in and play ${APP}`,
   button: "Sign in and play",
