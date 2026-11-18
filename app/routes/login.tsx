@@ -6,6 +6,7 @@ import {
 import { Form, redirect } from "react-router";
 import { getSession, signInLoader } from "../auth.server";
 import { passkeys } from "../passkey.client";
+import { CONTROL_BORDER } from "../controls";
 import type { Route } from "./+types/login";
 
 export function meta() {
@@ -18,7 +19,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   return data;
 }
 
-const input = "min-h-11 rounded border border-slate-300 p-2";
+const input = `min-h-11 rounded border ${CONTROL_BORDER} p-2`;
 const button =
   "min-h-11 rounded bg-slate-900 px-4 py-2 font-medium text-white disabled:opacity-50";
 
@@ -113,7 +114,7 @@ function PasskeySignIn({ redirectTo }: { redirectTo: string }) {
         type="button"
         onClick={passkey.signIn}
         disabled={passkey.pending}
-        className="min-h-11 rounded border border-slate-300 px-4 py-2"
+        className={`min-h-11 rounded border ${CONTROL_BORDER} px-4 py-2`}
       >
         Sign in with a passkey
       </button>

@@ -1,5 +1,51 @@
 # Changelog
 
+## [0.5.1](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.5.0...four-in-a-row-v0.5.1) (2026-11-18)
+
+
+### Miscellaneous Chores
+
+* release 0.5.1 ([#92](https://github.com/activescott/four-in-a-row/issues/92)) ([9f2ca79](https://github.com/activescott/four-in-a-row/commit/9f2ca791c56a7feaf825d6fabf31a51afdcfeab5))
+
+## [0.5.0](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.4.0...four-in-a-row-v0.5.0) (2026-11-17)
+
+
+### Features
+
+* head-to-head record on Your games and the game page ([#88](https://github.com/activescott/four-in-a-row/issues/88)) ([c3ddf2f](https://github.com/activescott/four-in-a-row/commit/c3ddf2f2bd9394e072bdbf1cc0f8dc3536fdd43b))
+
+## [0.4.0](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.3.1...four-in-a-row-v0.4.0) (2026-11-17)
+
+
+### Features
+
+* publish a migrate image for an init container ([#85](https://github.com/activescott/four-in-a-row/issues/85)) ([8ef9ef5](https://github.com/activescott/four-in-a-row/commit/8ef9ef52eb1b04629f7381b202fe55fdc7109bee))
+
+## [0.3.1](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.3.0...four-in-a-row-v0.3.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* tag-aware daily sign-in cap and a clearer retry message ([#77](https://github.com/activescott/four-in-a-row/issues/77)) ([e5bab6d](https://github.com/activescott/four-in-a-row/commit/e5bab6d759b880261d6a368fc6920e6ce2a180cb))
+
+## [0.3.0](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.2.0...four-in-a-row-v0.3.0) (2026-11-16)
+
+
+### Features
+
+* land on Your games with a clear New game button and a top-right account menu ([#68](https://github.com/activescott/four-in-a-row/issues/68)) ([e5f880d](https://github.com/activescott/four-in-a-row/commit/e5f880dbaa1ccfc2b9265406ee022dd1fe7353fa))
+* signed-out home page that explains the game ([#81](https://github.com/activescott/four-in-a-row/issues/81)) ([3acd977](https://github.com/activescott/four-in-a-row/commit/3acd977e6c64bc429552e7f28e5c5e378e378516))
+
+
+### Bug Fixes
+
+* 3 tries per sign-in code and a 6/hour, 24/day per-address cap ([#64](https://github.com/activescott/four-in-a-row/issues/64)) ([439669c](https://github.com/activescott/four-in-a-row/commit/439669ce6944a08715de4826be45563d629a3ba7))
+* control borders at 3:1 and a clear way back to Your games ([#75](https://github.com/activescott/four-in-a-row/issues/75)) ([9448b07](https://github.com/activescott/four-in-a-row/commit/9448b07a2c57ac7f3bd4e21bfd122b399a4b3632))
+* **deps:** minimatch &gt;=11.0.1 for Dependabot alert 1 ([#66](https://github.com/activescott/four-in-a-row/issues/66)) ([b3bc4a1](https://github.com/activescott/four-in-a-row/commit/b3bc4a10616f2d2612dd545d61cf7ccb70631b77))
+* home and sign-in page polish ([#61](https://github.com/activescott/four-in-a-row/issues/61)) ([5432bc9](https://github.com/activescott/four-in-a-row/commit/5432bc9aceeb91212f44fd14711fb77f54c1da01))
+* sign-in sent message no longer says you need an invite ([#80](https://github.com/activescott/four-in-a-row/issues/80)) ([d15e7e7](https://github.com/activescott/four-in-a-row/commit/d15e7e7b5400cfeb1a484234b941325827a3f75f))
+* tag-aware send-limit buckets, per-IP daily cap, startup prune, README limits ([#62](https://github.com/activescott/four-in-a-row/issues/62)) ([dec48b1](https://github.com/activescott/four-in-a-row/commit/dec48b1fec584902c2f3178505fd9652ebae58fe))
+
 ## [0.2.0](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.1.0...four-in-a-row-v0.2.0) (2026-11-16)
 
 

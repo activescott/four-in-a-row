@@ -136,7 +136,16 @@ test("an address that isn't an email, or the inviter's own, is refused and nothi
   const alice = await user("alice");
   const games = await db.game.count();
 
-  for (const email of ["", "bob", "bob@", "@example.com", "a b@example.com"]) {
+  for (const email of [
+    "",
+    "bob",
+    "bob@",
+    "@example.com",
+    "a b@example.com",
+    "bob(c1)@example.com",
+    "bob@example.com(x)",
+    '"b\\ob"@example.com',
+  ]) {
     expect(await invite(alice, email)).toEqual({
       ok: false,
       error: "invalid_email",
@@ -241,6 +250,8 @@ test("inviting an address with an account and one without looks the same, and do
   // and site-wide caps), for every address alike.
   expect(memberCalls).toContain("Invite.create");
   expect(memberCalls).toContain("User.findUnique");
+  // ...and run the same counts, the cross-IP daily one included.
+  expect(memberCalls.join("\n")).toContain("bucket_day");
   expect(recorded.calls).toEqual(memberCalls);
   expect(forMember).toEqual({ ok: true, gameId: expect.any(String) });
   expect(forStranger).toEqual({ ok: true, gameId: expect.any(String) });

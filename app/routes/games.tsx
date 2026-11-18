@@ -2,7 +2,7 @@ import { data, Form, Link, redirect, useNavigation } from "react-router";
 import { requireAuth } from "../auth.server";
 import { clientIp } from "../auth/client-ip.server";
 import { getDb } from "../db.server";
-import { displayName } from "../game/display";
+import { displayName, drawsLabel } from "../game/display";
 import { Wrappable } from "../game/wrappable";
 import { appUrl } from "../app-url.server";
 import { createRematch, listGames } from "../game/games.server";
@@ -13,6 +13,7 @@ import {
 } from "../game/invites.server";
 import { mailer } from "../mail/mailer.server";
 import type { Player } from "../game/rules";
+import { CONTROL_BORDER } from "../controls";
 import type { Route } from "./+types/games";
 
 export function meta() {
@@ -110,7 +111,7 @@ export default function Games({
           defaultValue={
             actionData && "email" in actionData ? String(actionData.email) : ""
           }
-          className="min-h-11 min-w-0 rounded-lg border border-slate-400 px-3 text-lg"
+          className={`min-h-11 min-w-0 rounded-lg border ${CONTROL_BORDER} px-3 text-lg`}
         />
         <button
           type="submit"
@@ -171,6 +172,18 @@ export default function Games({
                   >
                     {summary(game)}
                   </span>
+                  {game.record && (
+                    <span
+                      data-record
+                      className="min-w-0 break-words text-lg font-medium text-slate-800"
+                    >
+                      You {game.record.won} ·{" "}
+                      <Wrappable text={displayName(game.opponent, opponents)} />{" "}
+                      {game.record.lost}
+                      {game.record.drawn > 0 &&
+                        ` · ${drawsLabel(game.record.drawn)}`}
+                    </span>
+                  )}
                 </span>
               </Link>
               {game.result && (

@@ -9,8 +9,23 @@ FROM base AS build
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN npx prisma generate && npm run build && npm prune --omit=dev
+# --omit=optional: @prisma/client lists the CLI as an optional peer, which keeps it.
+RUN npx prisma generate && npm run build && npm prune --omit=dev --omit=optional
 
+# Init container image: the Prisma CLI and the migrations, nothing else.
+FROM base AS migrate
+ENV NODE_ENV=production \
+  CHECKPOINT_DISABLE=1 \
+  PRISMA_HIDE_UPDATE_MESSAGE=1
+COPY package.json package-lock.json ./
+# The CLI is a devDependency, which NODE_ENV=production would skip.
+RUN npm ci --include=dev
+COPY prisma.config.mts ./
+COPY prisma ./prisma
+USER node
+ENTRYPOINT ["node_modules/.bin/prisma", "migrate", "deploy"]
+
+# Last stage, so it stays the default target.
 FROM base
 ENV NODE_ENV=production \
   PORT=3000 \
@@ -18,8 +33,7 @@ ENV NODE_ENV=production \
   PRISMA_HIDE_UPDATE_MESSAGE=1
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/build ./build
-COPY package.json prisma.config.mts server.mjs docker-entrypoint.sh ./
-COPY prisma ./prisma
+COPY package.json server.mjs docker-entrypoint.sh ./
 USER node
 EXPOSE 3000
 ENTRYPOINT ["./docker-entrypoint.sh"]

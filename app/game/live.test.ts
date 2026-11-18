@@ -6,6 +6,7 @@ import {
   latestState,
   pollUrl,
   readPoll,
+  recordIsCurrent,
   startPolling,
 } from "./live";
 import { emptyBoard } from "./rules";
@@ -283,4 +284,12 @@ test("the poll sends the status it has as well as the move count", () => {
   expect(pollUrl(state({ moveCount: 1, status: "INVITED" }))).toBe(
     "/games/g1/state?since=1&status=INVITED",
   );
+});
+
+test("the record waits for the reload once the polled game has finished", () => {
+  const ongoing = { ...state(), status: "ACTIVE" as const, result: null };
+  const won = { ...ongoing, status: "WON" as const, result: "won" as const };
+  expect(recordIsCurrent(ongoing, ongoing)).toBe(true);
+  expect(recordIsCurrent(won, ongoing)).toBe(false);
+  expect(recordIsCurrent(won, won)).toBe(true);
 });

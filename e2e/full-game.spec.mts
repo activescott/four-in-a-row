@@ -11,6 +11,25 @@ test("a signed-out visitor reaches the sign-in form from the home page", async (
   await expect(page.getByLabel("Email")).toBeVisible();
 });
 
+test("the home page fits a 320px phone with no sideways scroll", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto("/");
+  await expect(
+    page.getByRole("img", { name: /Four in a Row board/ }),
+  ).toBeVisible();
+  const [scroll, inner] = await page.evaluate(() => [
+    document.documentElement.scrollWidth,
+    window.innerWidth,
+  ]);
+  expect(scroll).toBeLessThanOrEqual(inner);
+  const board = await page
+    .getByRole("img", { name: /Four in a Row board/ })
+    .boundingBox();
+  expect(board!.x + board!.width).toBeLessThanOrEqual(inner);
+});
+
 const name = (email: string) => email.split("@")[0]!;
 const column = (page: Page, n: number) =>
   page.getByRole("button", { name: `Drop a disc in column ${n}` });
@@ -98,6 +117,9 @@ test("A invites B by email and they play to a win, live on both boards", async (
 
   await expect(a.getByText("You won!")).toBeVisible();
   await expect(b.getByText("You lost.")).toBeVisible();
+  // The record updates on both boards, the watcher's included, with no reload.
+  await expect(a.getByText(`You 1 · ${name(emailB)} 0`)).toBeVisible();
+  await expect(b.getByText(`You 0 · ${name(emailA)} 1`)).toBeVisible();
   for (const page of [a, b]) {
     expect(
       await page.evaluate(() => (window as { e2eLoaded?: boolean }).e2eLoaded),
