@@ -10,6 +10,9 @@ A browser game of four-in-a-row for two players. It runs in Safari on iPhone and
 ```sh
 npm ci
 npx prisma generate   # writes the Prisma client to app/generated/
+# Run other Prisma commands as `npm run prisma -- <args>`: it works from any
+# subdirectory and keeps the CLI from calling checkpoint.prisma.io. A bare
+# `prisma` run outside the repo root skips prisma.config.mts and does call it.
 npm run dev           # PGlite database in ./pglite-data, migrated at startup
 npm test              # each test file gets a fresh in-memory PGlite database
 ```
@@ -29,6 +32,10 @@ npx playwright test                  # or --project=desktop-chromium
 ```
 
 With `DATABASE_URL` set, the app uses Postgres instead of PGlite. Health checks are at `/ops/health/liveness` (liveness) and `/ops/health/readiness` (readiness, with `db.size` in bytes).
+
+## Deploy and migrations
+
+The Dockerfile has two targets. The default target is the app: production dependencies only, with no Prisma CLI, and it starts with `node server.mjs` without touching the schema. The `migrate` target holds the Prisma CLI, `prisma/` and `prisma.config.mts`, and runs `prisma migrate deploy`. Release publishes both images with the same version tag (`four-in-a-row` and `four-in-a-row-migrate`). Run the migrate image as an init container of the app pod, with the same `DATABASE_URL`, so every pod start applies pending migrations (a no-op when there are none) before the app boots. CI fails if `@prisma/studio-core` or the `prisma` CLI is back in the app image.
 
 ## Sign-in
 

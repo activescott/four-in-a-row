@@ -493,3 +493,62 @@ test("the sign-in sent message doesn't say you need an invite", () => {
   );
   expect(html).not.toMatch(/invite|has played/i);
 });
+
+const rec = (won: number, lost: number, drawn = 0) => ({ won, lost, drawn });
+
+test("each list row shows your record with that opponent, big and plain", () => {
+  const html = text(
+    render("/games", Games, {
+      games: [
+        { ...row("g1", "jonah@example.com", false), record: rec(3, 2, 1) },
+        { ...row("g2", "cy@example.com", false), record: rec(1, 0) },
+        { ...row("g3", "di@example.com", false), record: null },
+      ],
+    }),
+  ).replace(/<wbr\/>/g, "");
+  expect(html).toContain("You 3 · jonah 2 · 1\u00a0draw");
+  expect(html).toContain("You 1 · cy 0<");
+  expect(html).not.toContain("draws");
+  expect(html.match(/ · /g)).toHaveLength(3);
+  expect(html).not.toContain("1 draw");
+});
+
+test("the board shows the pair's record near the top", () => {
+  const html = text(
+    render("/games/:id", Board, {
+      game: state(),
+      emails,
+      record: rec(3, 2),
+    }),
+  );
+  expect(html).toContain("You 3 · bob 2");
+  expect(html).not.toContain(" – ");
+  expect(html.indexOf("You 3 · bob 2")).toBeLessThan(html.indexOf("You are"));
+});
+
+test("the board record adds draws, and is absent without finished games", () => {
+  expect(
+    text(
+      render("/games/:id", Board, {
+        game: state(),
+        emails,
+        record: rec(0, 1, 2),
+      }),
+    ),
+  ).toContain("You 0 · bob 1 · 2\u00a0draws");
+  expect(
+    text(render("/games/:id", Board, { game: state(), emails, record: null })),
+  ).not.toContain("You 0 ·");
+});
+
+test("the board record keeps a single draw together", () => {
+  const html = text(
+    render("/games/:id", Board, {
+      game: state(),
+      emails,
+      record: rec(2, 3, 1),
+    }),
+  );
+  expect(html).toContain("You 2 · bob 3 · 1\u00a0draw");
+  expect(html).not.toContain("1 draw");
+});

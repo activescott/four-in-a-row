@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.5.1](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.5.0...four-in-a-row-v0.5.1) (2026-11-18)
+
+
+### Miscellaneous Chores
+
+* release 0.5.1 ([#92](https://github.com/activescott/four-in-a-row/issues/92)) ([9f2ca79](https://github.com/activescott/four-in-a-row/commit/9f2ca791c56a7feaf825d6fabf31a51afdcfeab5))
+
+## [0.5.0](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.4.0...four-in-a-row-v0.5.0) (2026-11-17)
+
+
+### Features
+
+* head-to-head record on Your games and the game page ([#88](https://github.com/activescott/four-in-a-row/issues/88)) ([c3ddf2f](https://github.com/activescott/four-in-a-row/commit/c3ddf2f2bd9394e072bdbf1cc0f8dc3536fdd43b))
+
+## [0.4.0](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.3.1...four-in-a-row-v0.4.0) (2026-11-17)
+
+
+### Features
+
+* publish a migrate image for an init container ([#85](https://github.com/activescott/four-in-a-row/issues/85)) ([8ef9ef5](https://github.com/activescott/four-in-a-row/commit/8ef9ef52eb1b04629f7381b202fe55fdc7109bee))
+
 ## [0.3.1](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.3.0...four-in-a-row-v0.3.1) (2026-11-17)
 
 

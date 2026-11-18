@@ -1,4 +1,5 @@
 import type { GameStatus, PrismaClient } from "../generated/prisma/client";
+import { recordsFor } from "./record.server";
 import { logger } from "../logger.server";
 import { applyMove, boardFromMoves, outcome, type Player } from "./rules";
 
@@ -204,9 +205,14 @@ export async function listGames(db: PrismaClient, userId: string) {
     .filter((id): id is string => id !== null);
   const users = await db.user.findMany({ where: { id: { in: opponentIds } } });
   const emails = new Map(users.map((u) => [u.id, u.email]));
+  const records = await recordsFor(db, userId);
+  // Games are newest first, so the first row seen for an opponent is their newest.
+  const shown = new Set<string>();
   const rows = games.map((game) => {
     const opponentId =
       game.playerOneId === userId ? game.playerTwoId : game.playerOneId;
+    const first = opponentId !== null && !shown.has(opponentId);
+    if (opponentId) shown.add(opponentId);
     return {
       id: game.id,
       status: game.status,
@@ -215,6 +221,7 @@ export async function listGames(db: PrismaClient, userId: string) {
       invited: invitedEmail(game, userId),
       yourTurn: game.nextPlayerId === userId,
       result: resultFor(game, userId),
+      record: (first && records.get(opponentId)) || null,
     };
   });
   // Array.sort is stable, so the newest-first order holds inside each group.
@@ -350,6 +357,18 @@ export async function playerEmails(
   const email = (id: string | null) =>
     users.find((u) => u.id === id)?.email ?? null;
   return { 1: email(game.playerOneId), 2: email(game.playerTwoId) };
+}
+
+/** The user's record against the other player of this game, or null if none finished. */
+export async function recordForGame(
+  db: PrismaClient,
+  game: { playerOneId: string; playerTwoId: string | null },
+  userId: string,
+) {
+  const opponentId =
+    game.playerOneId === userId ? game.playerTwoId : game.playerOneId;
+  if (!opponentId) return null;
+  return (await recordsFor(db, userId)).get(opponentId) ?? null;
 }
 
 export function isPlayer(
