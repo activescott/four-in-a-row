@@ -15,7 +15,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "prisma": "CHECKPOINT_DISABLE=1 prisma",
-    "check:no-checkpoint": "node scripts/check-no-checkpoint.mjs"
+    "check:no-checkpoint": "node scripts/check-no-checkpoint.mjs",
+    "check:playwright-image": "node scripts/check-playwright-image.mjs"
   },
   "dependencies": {
     "@activescott/auth": "^6.0.0",
