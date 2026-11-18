@@ -142,6 +142,18 @@ test("the gate lets every initiate through, a stranger's too", async () => {
   );
 });
 
+test.each([
+  "victim(c1)@example.com",
+  "(c)victim@example.com",
+  "victim@example.com(x)",
+  '"v\\ictim"@example.com',
+  '"vic".tim@example.com',
+])("the gate rejects %s as an invalid email", async (address) => {
+  expect(await gate().gate.onInitiate(attempt(address))).toMatchObject({
+    error: { code: "INVALID_CREDENTIALS" },
+  });
+});
+
 test("sends to an address that already has an account", async () => {
   await db.user.create({
     data: { email: "member@example.com", approvedAt: new Date() },

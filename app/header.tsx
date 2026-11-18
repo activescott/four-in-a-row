@@ -72,9 +72,13 @@ function AccountMenu({ email }: { email: string }) {
 
 export function Header({ email }: { email: string | null }) {
   const { pathname } = useLocation();
+  // The signed-out home page is wider; the header follows its column.
+  const wide = pathname === "/";
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4">
+      <div
+        className={`mx-auto flex items-center justify-between gap-3 ${wide ? "max-w-6xl px-5" : "max-w-md px-4"}`}
+      >
         <Link
           to={email ? "/games" : "/"}
           className="flex min-h-11 items-center text-xl font-bold text-slate-900"
@@ -84,7 +88,9 @@ export function Header({ email }: { email: string | null }) {
         {email ? (
           <AccountMenu email={email} />
         ) : (
-          pathname !== "/login" && (
+          // /login and the home page each have their own Sign in action.
+          pathname !== "/login" &&
+          pathname !== "/" && (
             <Link
               to="/login"
               className="flex min-h-11 items-center rounded-lg px-3 font-medium text-blue-800 underline"

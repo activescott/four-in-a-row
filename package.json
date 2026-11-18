@@ -1,10 +1,10 @@
 {
   "name": "four-in-a-row",
-  "version": "0.2.0",
+  "version": "0.5.2",
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=24 <27"
   },
   "scripts": {
     "dev": "PGLITE_DIR=pglite-data react-router dev",
@@ -13,7 +13,10 @@
     "typecheck": "react-router typegen && tsc",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prisma": "CHECKPOINT_DISABLE=1 prisma",
+    "check:no-checkpoint": "node scripts/check-no-checkpoint.mjs",
+    "check:playwright-image": "node scripts/check-playwright-image.mjs"
   },
   "dependencies": {
     "@activescott/auth": "^6.0.0",
@@ -29,7 +32,6 @@
     "isbot": "^5.2.3",
     "nodemailer": "^10.5.0",
     "pino": "^10.4.0",
-    "prisma": "^7.10.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router": "^8.5.1"
@@ -49,6 +51,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.14.0",
     "pglite-prisma-adapter": "^0.7.2",
+    "prisma": "^7.10.1",
     "prettier": "^3.10.1",
     "tailwindcss": "^4.3.5",
     "typescript": "^7.0.0",

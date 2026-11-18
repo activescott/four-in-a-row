@@ -29,3 +29,11 @@ export function maskEmail(email: string): string {
   const at = email.lastIndexOf("@");
   return `${email[0] ?? ""}•••${at > 0 ? email.slice(at) : ""}`;
 }
+
+/**
+ * The draws part of a record ("1 draw", "2 draws"), empty when there are none.
+ * The space is non-breaking so it cannot split across lines on a phone.
+ */
+export function drawsLabel(drawn: number): string {
+  return drawn === 0 ? "" : `${drawn}\u00a0${drawn === 1 ? "draw" : "draws"}`;
+}

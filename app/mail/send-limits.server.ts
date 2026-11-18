@@ -1,6 +1,8 @@
+import { domainToASCII } from "node:url";
 import type { PrismaClient } from "../generated/prisma/client";
 import { ipKey } from "../auth/client-ip.server";
 import { type Logger, logger as appLogger } from "../logger.server";
+import { isDeliverableAddress } from "./address.server";
 import type { MailKind } from "./mailer.server";
 
 // Send limits (#58). Anyone can sign up, so the app must not become a way to
@@ -19,6 +21,12 @@ export const SEND_LIMITS = {
    * the owner's day (#60). The hourly cap above counts every client.
    */
   signInPerAddressPerDay: 10,
+  /**
+   * Sign-in mail to one inbox (the bucket key, so every +tag and Gmail dot
+   * variant), from any client. The auth library caps each exact address, so
+   * tags would otherwise each get their own day (#76).
+   */
+  signInPerBucketPerDay: 24,
   /** Invites to one address, from anyone. */
   invitePerAddressPerDay: 2,
   /** "Your turn" mail to one address. */
@@ -47,24 +55,31 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
 /**
- * The key an address is counted under: NFKC-normalised and lowercased, without a `+tag` in the
- * local part, and for Gmail without dots in it, since all of those reach one
+ * The key an address is counted under: NFKC-normalised and lowercased, with
+ * the domain in its ASCII (punycode) form, without a `+tag` in the
+ * local part, and for Gmail (googlemail.com counts as gmail.com) without dots in it, since all of those reach one
  * inbox. Only the key changes, never the address the mail goes to.
  */
 export function bucketKey(address: string): string {
   const lower = address.trim().normalize("NFKC").toLowerCase();
   const at = lower.lastIndexOf("@");
   if (at < 1) return lower;
-  // A quoted local part may legitimately contain "+" and ".": leave it be.
-  if (lower.startsWith('"')) return lower;
   let local = lower.slice(0, at);
+  // "victim+1" is the same inbox as victim+1: unquote it when nothing in it
+  // needs the quotes. Any other quoted local part is left as it is.
+  const quoted = /^"([a-z0-9!#$%&'*+/=?^_`{|}~.-]+)"$/.exec(local);
+  if (quoted) local = quoted[1]!;
+  else if (local.startsWith('"')) return lower;
   // "gmail.com." is the same domain as "gmail.com".
-  const domain = lower.slice(at + 1).replace(/\.$/, "");
+  // googlemail.com is the same inbox as gmail.com, so it shares its bucket.
+  // The domain is keyed in its ASCII form, so bücher.de, xn--bcher-kva.de,
+  // bücher。de and a domain with a soft hyphen in it are one domain.
+  const rawDomain = lower.slice(at + 1);
+  let domain = (domainToASCII(rawDomain) || rawDomain).replace(/\.$/, "");
+  if (domain === "googlemail.com") domain = "gmail.com";
   const plus = local.indexOf("+");
   if (plus > 0) local = local.slice(0, plus);
-  if (domain === "gmail.com" || domain === "googlemail.com") {
-    local = local.replaceAll(".", "");
-  }
+  if (domain === "gmail.com") local = local.replaceAll(".", "");
   return `${local}@${domain}`;
 }
 
@@ -82,6 +97,7 @@ type Counts = {
   address_hour: number;
   address_day: number;
   address_client_day: number;
+  bucket_day: number;
   client_signin_hour: number;
   client_day: number;
   site_day: number;
@@ -129,6 +145,19 @@ export async function reserveSend(
     shouldPrune = () => Math.random() < 1 / SEND_LIMITS.pruneOneIn,
   }: SendOptions = {},
 ): Promise<SendVerdict> {
+  if (!isDeliverableAddress(address)) {
+    // Comments and escapes would reach an inbox under a key of their own.
+    // Every sender validates first, so this is the backstop for stored
+    // addresses; nothing is recorded.
+    const verdict: SendVerdict = { ok: false, reason: "address" };
+    logger.warn({
+      event: "email.limit",
+      reason: "address",
+      kind,
+      invalid: true,
+    });
+    return verdict;
+  }
   const to = address.toLowerCase();
   const bucket = bucketKey(address);
   const key = ipKey(ip);
@@ -169,6 +198,8 @@ export async function reserveSend(
             AS address_day,
           (count(*) FILTER (WHERE s.bucket = ${bucket} AND s.kind = ${kind}
             AND s.ip = ${key}))::int AS address_client_day,
+          (count(*) FILTER (WHERE s.bucket = ${bucket} AND s.kind = 'signin'))::int
+            AS bucket_day,
           (count(*) FILTER (WHERE s.kind = 'signin' AND s.ip = ${key}
             AND s.created_at > ${hourSince}::timestamp))::int
             AS client_signin_hour,
@@ -231,6 +262,7 @@ function decide(
     address_hour: 0,
     address_day: 0,
     address_client_day: 0,
+    bucket_day: 0,
     client_signin_hour: 0,
     client_day: 0,
     site_day: 0,
@@ -247,7 +279,8 @@ function decide(
     kind === "invite"
       ? c.address_day >= L.invitePerAddressPerDay
       : c.address_hour >= L.signInPerAddressPerHour ||
-        c.address_client_day >= L.signInPerAddressPerDay
+        c.address_client_day >= L.signInPerAddressPerDay ||
+        c.bucket_day >= L.signInPerBucketPerDay
   ) {
     return refuse("address");
   }

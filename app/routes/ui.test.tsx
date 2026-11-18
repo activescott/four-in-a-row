@@ -7,6 +7,7 @@ import Board from "./games.$id";
 import Games from "./games";
 import Invite from "./invite.$key";
 import Login from "./login";
+import { signInEmail } from "../mail/templates";
 
 // Renders a route component the way React Router would with this loader data.
 function render(path: string, Component: unknown, loaderData: unknown) {
@@ -339,8 +340,15 @@ test("the invite page explains the sign-in email and posts to itself, without th
 
 test("after sending, the invite page says what to do with the email and labels the code", () => {
   const html = render("/invite/:id", Invite, { ...pending, sent: true });
+  // The subject line is what people scan their inbox for, so quote it from
+  // the template, not from a copy of the string.
+  const { subject } = signInEmail({
+    to: "b@example.com",
+    link: "https://example.com/x",
+    minutes: 5,
+  });
   expect(html).toContain(
-    "Open the email we just sent, “Sign in to Four in a Row”, and tap the link, or type the 6-digit code here.",
+    `Open the email we just sent, “${subject}”, and tap the link, or type the 6-digit code here.`,
   );
   expect(html).toMatch(/<label for="code"[^>]*>6-digit code<\/label>/);
   expect(html).toMatch(
@@ -492,4 +500,63 @@ test("the sign-in sent message doesn't say you need an invite", () => {
     "Check your email for a sign-in link and code. It can take a minute, and it may land in spam. If nothing arrives, wait a little and ask again.",
   );
   expect(html).not.toMatch(/invite|has played/i);
+});
+
+const rec = (won: number, lost: number, drawn = 0) => ({ won, lost, drawn });
+
+test("each list row shows your record with that opponent, big and plain", () => {
+  const html = text(
+    render("/games", Games, {
+      games: [
+        { ...row("g1", "jonah@example.com", false), record: rec(3, 2, 1) },
+        { ...row("g2", "cy@example.com", false), record: rec(1, 0) },
+        { ...row("g3", "di@example.com", false), record: null },
+      ],
+    }),
+  ).replace(/<wbr\/>/g, "");
+  expect(html).toContain("You 3 · jonah 2 · 1\u00a0draw");
+  expect(html).toContain("You 1 · cy 0<");
+  expect(html).not.toContain("draws");
+  expect(html.match(/ · /g)).toHaveLength(3);
+  expect(html).not.toContain("1 draw");
+});
+
+test("the board shows the pair's record near the top", () => {
+  const html = text(
+    render("/games/:id", Board, {
+      game: state(),
+      emails,
+      record: rec(3, 2),
+    }),
+  );
+  expect(html).toContain("You 3 · bob 2");
+  expect(html).not.toContain(" – ");
+  expect(html.indexOf("You 3 · bob 2")).toBeLessThan(html.indexOf("You are"));
+});
+
+test("the board record adds draws, and is absent without finished games", () => {
+  expect(
+    text(
+      render("/games/:id", Board, {
+        game: state(),
+        emails,
+        record: rec(0, 1, 2),
+      }),
+    ),
+  ).toContain("You 0 · bob 1 · 2\u00a0draws");
+  expect(
+    text(render("/games/:id", Board, { game: state(), emails, record: null })),
+  ).not.toContain("You 0 ·");
+});
+
+test("the board record keeps a single draw together", () => {
+  const html = text(
+    render("/games/:id", Board, {
+      game: state(),
+      emails,
+      record: rec(2, 3, 1),
+    }),
+  );
+  expect(html).toContain("You 2 · bob 3 · 1\u00a0draw");
+  expect(html).not.toContain("1 draw");
 });
