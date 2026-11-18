@@ -33,6 +33,10 @@ npx playwright test                  # or --project=desktop-chromium
 
 With `DATABASE_URL` set, the app uses Postgres instead of PGlite. Health checks are at `/ops/health/liveness` (liveness) and `/ops/health/readiness` (readiness, with `db.size` in bytes).
 
+## Deploy and migrations
+
+The Dockerfile has two targets. The default target is the app: production dependencies only, with no Prisma CLI, and it starts with `node server.mjs` without touching the schema. The `migrate` target holds the Prisma CLI, `prisma/` and `prisma.config.mts`, and runs `prisma migrate deploy`. Release publishes both images with the same version tag (`four-in-a-row` and `four-in-a-row-migrate`). Run the migrate image as an init container of the app pod, with the same `DATABASE_URL`, so every pod start applies pending migrations (a no-op when there are none) before the app boots. CI fails if `@prisma/studio-core` or the `prisma` CLI is back in the app image.
+
 ## Sign-in
 
 Sign-in uses [`@activescott/auth`](https://github.com/activescott/auth): an email link or code at `/login`, and passkeys added from `/profile`. Anyone can sign up: a never-seen address that enters its email at `/login` is sent a sign-in email, and a verified sign-in creates the account. To keep the app from becoming a way to mail strangers, every sign-in, invite and turn email is checked against send limits and recorded in the `email_sends` table (limits in `app/mail/send-limits.server.ts`):
