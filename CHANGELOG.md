@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.5.1...four-in-a-row-v0.5.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* invite page names the sign-in email by its exact subject ([#99](https://github.com/activescott/four-in-a-row/issues/99)) ([287e7f1](https://github.com/activescott/four-in-a-row/commit/287e7f12c2ea044915520306f0e8bf24dcb651ab))
+
 ## [0.5.1](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.5.0...four-in-a-row-v0.5.1) (2026-11-18)
 
 
