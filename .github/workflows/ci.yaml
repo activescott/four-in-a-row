@@ -38,6 +38,9 @@ jobs:
       # package-lock.json, or its browsers don't match.
       - name: Check Playwright image matches @playwright/test
         run: npm run check:playwright-image
+      # Every Prisma CLI call must have CHECKPOINT_DISABLE set, not rely on the config file.
+      - name: Check Prisma calls set CHECKPOINT_DISABLE
+        run: npm run check:checkpoint-env
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
