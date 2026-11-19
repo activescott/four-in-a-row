@@ -13,10 +13,8 @@ for (const f of readdirSync(".github/workflows")) {
   const path = `.github/workflows/${f}`;
   const text = readFileSync(path, "utf8");
   const [header, jobsPart = ""] = text.split(/^jobs:\s*$/m);
-  if (/^ {2}CHECKPOINT_DISABLE:/m.test(header) && /^env:/m.test(header)) {
-    // Workflow-level env covers everything.
-    if (/^env:\s*\n(?:\s+.*\n)*?\s+CHECKPOINT_DISABLE:/m.test(header)) continue;
-  }
+  // Workflow-level env covers every job.
+  if (/^env:\s*\n(?:\s+.*\n)*?\s+CHECKPOINT_DISABLE:/m.test(header)) continue;
   for (const job of jobsPart.split(/^ {2}(?=[\w-]+:\s*$)/m).slice(1)) {
     const name = job.split(":")[0];
     const [jobHead] = job.split(/^ {4}steps:/m);
@@ -35,7 +33,6 @@ for (const f of readdirSync(".github/workflows")) {
 // Dockerfile: an ENV before the call, in the same stage or an earlier stage it builds FROM.
 const stages = new Map(); // name -> { parent, env: bool }
 let cur = null;
-let envSet = false;
 readFileSync("Dockerfile", "utf8")
   .split(/\n(?=\S)/)
   .forEach((ins) => {
