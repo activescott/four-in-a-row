@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Stops the Prisma CLI calling checkpoint.prisma.io, whatever the cwd or config.
+  CHECKPOINT_DISABLE: "1"
+
 jobs:
   validate:
     runs-on: ubuntu-latest

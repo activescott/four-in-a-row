@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl \
 WORKDIR /app
 
 FROM base AS build
+ENV CHECKPOINT_DISABLE=1
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
