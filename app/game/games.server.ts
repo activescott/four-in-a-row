@@ -266,8 +266,8 @@ export type RematchOutcome =
 /**
  * Starts a rematch of a finished game, or returns the one already started,
  * so both players pressing Rematch land in the same game. On an older game
- * it follows the rematch chain to the newest game. The player who moved
- * second moves first.
+ * it follows the rematch chain to the newest game. Each player keeps their
+ * seat (colour); the player who moved second moves first.
  */
 export async function createRematch(
   db: PrismaClient,
@@ -323,12 +323,19 @@ function startRematch(
     if (resultFor(latest, userId) === null || !latest.playerTwoId) {
       return { ok: true, gameId: latest.id, created: false };
     }
+    // A finished game has moves; whoever played the first one moves second now.
+    const opener = await tx.move.findUniqueOrThrow({
+      where: { gameId_number: { gameId: latest.id, number: 1 } },
+    });
     const created = await tx.game.create({
       data: {
-        playerOneId: latest.playerTwoId,
-        playerTwoId: latest.playerOneId,
+        playerOneId: latest.playerOneId,
+        playerTwoId: latest.playerTwoId,
         status: "ACTIVE",
-        nextPlayerId: latest.playerTwoId,
+        nextPlayerId:
+          opener.playerId === latest.playerOneId
+            ? latest.playerTwoId
+            : latest.playerOneId,
         rematchOfId: latest.id,
       },
     });
