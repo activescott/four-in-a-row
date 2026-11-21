@@ -421,7 +421,7 @@ test("a non-player gets 404 from the board, moves, state and rematch", async () 
   expect(await db.game.count({ where: { rematchOfId: game.id } })).toBe(0);
 });
 
-test("rematch starts a new game with the same opponent, second mover first", async () => {
+test("rematch keeps each player's colour; the second mover moves first", async () => {
   const { one, two, game } = await activeGame();
   expect(await rematch(two, game.id)).toMatchObject({ status: 409 });
   await playToWin(one, two, game.id);
@@ -432,8 +432,8 @@ test("rematch starts a new game with the same opponent, second mover first", asy
     where: { rematchOfId: game.id },
   });
   expect(created).toMatchObject({
-    playerOneId: two.id,
-    playerTwoId: one.id,
+    playerOneId: one.id,
+    playerTwoId: two.id,
     status: "ACTIVE",
     nextPlayerId: two.id,
     moveCount: 0,
