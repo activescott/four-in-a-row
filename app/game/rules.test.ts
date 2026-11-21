@@ -68,6 +68,13 @@ describe("boardFromMoves", () => {
     expect(board[0]!.slice(0, 3)).toEqual([1, 2, 1]);
   });
 
+  it("alternates turns starting with player 2 when 2 moves first", () => {
+    const r = boardFromMoves([0, 1, 2], 2);
+    if (!r.ok) throw new Error("unexpected error");
+    expect(r.board[0]!.slice(0, 3)).toEqual([2, 1, 2]);
+    expect(r.lastMove).toEqual({ column: 2, row: 0, player: 2 });
+  });
+
   it("stacks discs and reports the last move", () => {
     const { board, lastMove } = play([4, 4]);
     expect(board[0]![4]).toBe(1);
