@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.5.2...four-in-a-row-v0.5.3) (2026-11-21)
+
+
+### Bug Fixes
+
+* rematch keeps each player's colour ([#106](https://github.com/activescott/four-in-a-row/issues/106)) ([e79df5f](https://github.com/activescott/four-in-a-row/commit/e79df5f4fb49d441db6a01e00a0a8815ddcc6c92))
+
 ## [0.5.2](https://github.com/activescott/four-in-a-row/compare/four-in-a-row-v0.5.1...four-in-a-row-v0.5.2) (2026-11-18)
 
 
