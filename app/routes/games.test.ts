@@ -471,12 +471,6 @@ test("rematch on an older finished game rematches the newest game in its chain",
     ),
   )) as Response;
 
-  console.log(
-    "DEBUG",
-    JSON.stringify(started),
-    started.status,
-    JSON.stringify(await db.game.findMany()),
-  );
   const third = await db.game.findUniqueOrThrow({
     where: { rematchOfId: second.id },
   });

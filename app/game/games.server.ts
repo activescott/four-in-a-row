@@ -41,7 +41,10 @@ export async function makeMove(
       return { ok: false, status: 409, error: "stale" };
     }
 
-    const replay = boardFromMoves(game.moves.map((m) => m.column));
+    const replay = boardFromMoves(
+      game.moves.map((m) => m.column),
+      openingSeat(game),
+    );
     if (!replay.ok) throw new Error(`Game ${gameId} has an invalid move list`);
     const seat: Player = userId === game.playerOneId ? 1 : 2;
     const result = applyMove(replay.board, column, seat);
@@ -119,11 +122,22 @@ export async function recordSeen(
   });
 }
 
+/** The seat that played move 1; rematches alternate it. */
+function openingSeat(game: {
+  playerOneId: string;
+  moves: { playerId: string }[];
+}): Player {
+  return game.moves[0] && game.moves[0].playerId !== game.playerOneId ? 2 : 1;
+}
+
 type GameWithMoves = NonNullable<Awaited<ReturnType<typeof findGameForPlayer>>>;
 
 /** What a player sees: the board, whose turn it is and the result. */
 export function gameState(game: GameWithMoves, userId: string) {
-  const replay = boardFromMoves(game.moves.map((m) => m.column));
+  const replay = boardFromMoves(
+    game.moves.map((m) => m.column),
+    openingSeat(game),
+  );
   if (!replay.ok) throw new Error(`Game ${game.id} has an invalid move list`);
   const last = replay.lastMove;
   const result = last ? outcome(replay.board, last) : null;
