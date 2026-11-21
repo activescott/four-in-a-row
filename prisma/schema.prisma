@@ -43,7 +43,7 @@ enum GameStatus {
 
 model Game {
   id              String     @id @default(uuid())
-  playerOneId     String     @map("player_one_id") // moves first
+  playerOneId     String     @map("player_one_id") // colour seat 1; the first move alternates per rematch
   playerTwoId     String?    @map("player_two_id") // null until the invite is accepted
   status          GameStatus
   nextPlayerId    String?    @map("next_player_id") // null once finished

@@ -41,7 +41,10 @@ export async function makeMove(
       return { ok: false, status: 409, error: "stale" };
     }
 
-    const replay = boardFromMoves(game.moves.map((m) => m.column));
+    const replay = boardFromMoves(
+      game.moves.map((m) => m.column),
+      openingSeat(game),
+    );
     if (!replay.ok) throw new Error(`Game ${gameId} has an invalid move list`);
     const seat: Player = userId === game.playerOneId ? 1 : 2;
     const result = applyMove(replay.board, column, seat);
@@ -119,11 +122,22 @@ export async function recordSeen(
   });
 }
 
+/** The seat that played move 1; rematches alternate it. */
+function openingSeat(game: {
+  playerOneId: string;
+  moves: { playerId: string }[];
+}): Player {
+  return game.moves[0] && game.moves[0].playerId !== game.playerOneId ? 2 : 1;
+}
+
 type GameWithMoves = NonNullable<Awaited<ReturnType<typeof findGameForPlayer>>>;
 
 /** What a player sees: the board, whose turn it is and the result. */
 export function gameState(game: GameWithMoves, userId: string) {
-  const replay = boardFromMoves(game.moves.map((m) => m.column));
+  const replay = boardFromMoves(
+    game.moves.map((m) => m.column),
+    openingSeat(game),
+  );
   if (!replay.ok) throw new Error(`Game ${game.id} has an invalid move list`);
   const last = replay.lastMove;
   const result = last ? outcome(replay.board, last) : null;
@@ -266,8 +280,8 @@ export type RematchOutcome =
 /**
  * Starts a rematch of a finished game, or returns the one already started,
  * so both players pressing Rematch land in the same game. On an older game
- * it follows the rematch chain to the newest game. The player who moved
- * second moves first.
+ * it follows the rematch chain to the newest game. Each player keeps their
+ * seat (colour); the player who moved second moves first.
  */
 export async function createRematch(
   db: PrismaClient,
@@ -323,12 +337,19 @@ function startRematch(
     if (resultFor(latest, userId) === null || !latest.playerTwoId) {
       return { ok: true, gameId: latest.id, created: false };
     }
+    // A finished game has moves; whoever played the first one moves second now.
+    const opener = await tx.move.findUniqueOrThrow({
+      where: { gameId_number: { gameId: latest.id, number: 1 } },
+    });
     const created = await tx.game.create({
       data: {
-        playerOneId: latest.playerTwoId,
-        playerTwoId: latest.playerOneId,
+        playerOneId: latest.playerOneId,
+        playerTwoId: latest.playerTwoId,
         status: "ACTIVE",
-        nextPlayerId: latest.playerTwoId,
+        nextPlayerId:
+          opener.playerId === latest.playerOneId
+            ? latest.playerTwoId
+            : latest.playerOneId,
         rematchOfId: latest.id,
       },
     });

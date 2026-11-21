@@ -34,6 +34,7 @@ const state = await import("./games.$id.state");
 const board = await import("./games.$id");
 const games = await import("./games");
 const { createRematch, makeMove } = await import("../game/games.server");
+type GameState = import("../game/games.server").GameState;
 
 type Player = { id: string; email: string; cookie: string };
 
@@ -421,7 +422,7 @@ test("a non-player gets 404 from the board, moves, state and rematch", async () 
   expect(await db.game.count({ where: { rematchOfId: game.id } })).toBe(0);
 });
 
-test("rematch starts a new game with the same opponent, second mover first", async () => {
+test("rematch keeps each player's colour; the second mover moves first", async () => {
   const { one, two, game } = await activeGame();
   expect(await rematch(two, game.id)).toMatchObject({ status: 409 });
   await playToWin(one, two, game.id);
@@ -432,8 +433,8 @@ test("rematch starts a new game with the same opponent, second mover first", asy
     where: { rematchOfId: game.id },
   });
   expect(created).toMatchObject({
-    playerOneId: two.id,
-    playerTwoId: one.id,
+    playerOneId: one.id,
+    playerTwoId: two.id,
     status: "ACTIVE",
     nextPlayerId: two.id,
     moveCount: 0,
@@ -450,6 +451,30 @@ test("rematch starts a new game with the same opponent, second mover first", asy
   )) as Response;
   expect(joined.headers.get("location")).toBe(`/games/${created.id}`);
   expect(await db.game.count({ where: { rematchOfId: game.id } })).toBe(1);
+});
+
+test("a game opened by seat 2 reports the right colours and turn", async () => {
+  const { one, two, game } = await activeGame();
+  await playToWin(one, two, game.id);
+  await rematch(two, game.id);
+  const created = await db.game.findFirstOrThrow({
+    where: { rematchOfId: game.id },
+  });
+  // Two (seat 2) opens in column 3; one answers in column 4.
+  expect((await move(two, created.id, 3)).status).toBe(200);
+
+  const asTwo = (await readState(two, created.id)).body as GameState;
+  expect(asTwo).toMatchObject({ you: 2, yourTurn: false, moveCount: 1 });
+  expect(asTwo.board[0]![3]).toBe(2);
+  expect(asTwo.lastMove).toMatchObject({ column: 3, player: 2 });
+  const asOne = (await readState(one, created.id)).body as GameState;
+  expect(asOne).toMatchObject({ you: 1, yourTurn: true });
+  expect(asOne.board[0]![3]).toBe(2);
+
+  expect((await move(one, created.id, 4)).status).toBe(200);
+  const after = (await readState(two, created.id)).body as GameState;
+  expect(after).toMatchObject({ yourTurn: true, moveCount: 2 });
+  expect(after.board[0]!.slice(3, 5)).toEqual([2, 1]);
 });
 
 test("rematch on an older finished game rematches the newest game in its chain", async () => {

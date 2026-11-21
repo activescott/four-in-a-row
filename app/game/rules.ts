@@ -97,12 +97,15 @@ export function outcome(board: Board, lastMove: Position): Outcome {
   return full ? { status: "draw" } : { status: "ongoing" };
 }
 
-/** Rebuilds a board from ordered columns; player 1 first, turns alternate. */
-export function boardFromMoves(columns: readonly number[]): ReplayResult {
+/** Rebuilds a board from ordered columns; turns alternate from `first`. */
+export function boardFromMoves(
+  columns: readonly number[],
+  first: Player = 1,
+): ReplayResult {
   let board = emptyBoard();
   let lastMove: Move | null = null;
   for (const [moveIndex, column] of columns.entries()) {
-    const player: Player = moveIndex % 2 === 0 ? 1 : 2;
+    const player: Player = moveIndex % 2 === 0 ? first : first === 1 ? 2 : 1;
     const result = applyMove(board, column, player);
     if (!result.ok) {
       return { ok: false, error: { ...result.error, moveIndex } };
