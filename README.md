@@ -9,11 +9,11 @@ A browser game of four-in-a-row for two players. It runs in Safari on iPhone and
 
 ```sh
 npm ci
-npx prisma generate   # writes the Prisma client to app/generated/
+npm run prisma -- generate   # writes the Prisma client to app/generated/
 # Run other Prisma commands as `npm run prisma -- <args>`: it works from any
 # subdirectory and keeps the CLI from calling checkpoint.prisma.io. A bare
 # `prisma` run outside the repo root skips prisma.config.mts and does call it.
-npm run dev           # PGlite database in ./pglite-data, migrated at startup
+npm run dev                  # PGlite database in ./pglite-data, migrated at startup
 npm test              # each test file gets a fresh in-memory PGlite database
 ```
 

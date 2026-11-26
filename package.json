@@ -16,6 +16,7 @@
     "test": "vitest run",
     "prisma": "CHECKPOINT_DISABLE=1 prisma",
     "check:no-checkpoint": "node scripts/check-no-checkpoint.mjs",
+    "check:checkpoint-env": "node scripts/check-checkpoint-env.mjs",
     "check:playwright-image": "node scripts/check-playwright-image.mjs"
   },
   "dependencies": {
