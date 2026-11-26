@@ -64,6 +64,10 @@ Over a limit, nothing is sent and the form gives the same answer as for a sent e
 
 "New game" emails the other player a link to `/invite/:token`. The token is random, works once, expires after 7 days and is tied to the game and the inviter. It is not a sign-in credential: the invite page starts the normal email sign-in for the invited address in the invitee's own browser, showing the address only masked, which returns to `/invite/:gameId` and seats them. Each player can have at most 5 invites pending, one per address, and the response never says whether the address already has an account. If the relay times out but delivers the email anyway, the app has already deleted the game, so the link shows not found; that is accepted, and the invitee can be invited again. After each move, the player whose turn it is gets a "your turn" email unless they have the board open.
 
+## Environment variables
+
+The app reads these variables.
+
 | Variable                                                          | Purpose                                                                                    |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `JWT_SECRET`                                                      | Signs session cookies. Required in production; dev uses a random one per run.              |
