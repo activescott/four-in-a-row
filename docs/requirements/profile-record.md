@@ -1,3 +1,5 @@
+# Profile record requirements
+
 ## Requirements
 
 Micah asked on 2026-11-17 for the profile page to show "how good you're doing" (games won out of games played) and "maybe some awards". Today the profile shows only your email, when you joined and your sign-in methods. Your record against each opponent appears only on the games list and the game page ("You 2 · jonah 3 · 1 draw"), one opponent at a time, and there is no total anywhere.
@@ -16,22 +18,26 @@ Every number below comes from `games` rows the app already keeps: `status` (WON 
 
 ### Requirements
 
-1. The profile page shows **Your record** first, above the sign-in settings: games finished, wins, losses and draws, against everyone. Wins read in words, "12 wins out of 20 games", with no percentage. (P1)
-2. Under it, the profile lists **Against each person**: one row per opponent with at least one finished game, showing wins, losses and draws in the same form as the existing score line ("You 7 · grandma 5 · 1 draw"), most games played first. Opponents are named by `displayName()`, as on the games list. (P1, P3)
-3. With no finished games, the record reads "No finished games yet" and the per-opponent list is not shown. (P1)
-4. The profile shows **Awards**, these 6 to start, each earned once:
-   - **First win**: win a game. Every new player can get one early.
-   - **Ten wins**: win 10 games. A longer goal for the same player.
-   - **Hat trick**: win 3 finished games in a row, by `finishedAt`, against anyone. A draw or loss ends the run.
-   - **Full board**: finish a game in a draw. Draws need all 42 squares filled, so they mean a close game, and both players earn it.
-   - **Regular**: finish 25 games, won or not. Rewards playing, so a younger or newer player earns it as fast as a strong one.
-   - **Rematch!**: finish 5 games against the same person. Rewards playing together, which is what the app is for.
+| ID  | Requirement                                                                                                                                                                                                                                                                                                                                                      | Problem |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| R1  | The profile page shows **Your record** first, above the sign-in settings: games finished, wins, losses and draws, against everyone. Wins read in words, "12 wins out of 20 games", with no percentage.                                                                                                                                                           | P1      |
+| R2  | Under it, the profile lists **Against each person**: one row per opponent with at least one finished game, showing wins, losses and draws in the same form as the existing score line ("You 7 · grandma 5 · 1 draw"), most games played first, with ties sorted alphabetically by `displayName()`. Opponents are named by `displayName()`, as on the games list. | P1, P3  |
+| R3  | With no finished games, the record reads "No finished games yet" and the per-opponent list is not shown.                                                                                                                                                                                                                                                         | P1      |
+| R4  | The profile shows **Awards**, these 6 to start, each earned once. They are listed below the table.                                                                                                                                                                                                                                                               | P2      |
+| R5  | An award not yet earned shows greyed out with how to earn it and how far along you are ("Ten wins: 6 of 10"). An earned award shows the date of the game that earned it.                                                                                                                                                                                         | P2      |
+| R6  | Records and awards are worked out from finished games when the page loads, so games already played count the moment this ships. Nothing new is stored per game.                                                                                                                                                                                                  | P1, P2  |
+| R7  | Only you see your own record and awards.                                                                                                                                                                                                                                                                                                                         | P1, P2  |
 
-   Three of the six (Full board, Regular, Rematch!) can be earned without winning, so a child who loses most games to an older sibling still collects awards. None is earned by losing, and none compares you with another player. (P2)
+The 6 awards in R4:
 
-5. An award not yet earned shows greyed out with how to earn it and how far along you are ("Ten wins: 6 of 10"). An earned award shows the date of the game that earned it. (P2)
-6. Records and awards are worked out from finished games when the page loads, so games already played count the moment this ships. Nothing new is stored per game. (P1, P2)
-7. Only you see your own record and awards. (P1, P2)
+- **First win**: win a game. Every new player can get one early.
+- **Ten wins**: win 10 games. A longer goal for the same player.
+- **Hat trick**: win 3 finished games in a row, by `finishedAt`, against anyone. A draw or loss ends the run.
+- **Full board**: finish a game in a draw. Draws need all 42 squares filled, so they mean a close game, and both players earn it.
+- **Regular**: finish 25 games, won or not. Rewards playing, so a younger or newer player earns it as fast as a strong one.
+- **Rematch!**: finish 5 games against the same person, rematch or not. Rewards playing together, which is what the app is for.
+
+Three of the six (Full board, Regular, Rematch!) can be earned without winning, so a child who loses most games to an older sibling still collects awards. None is earned by losing, and none compares you with another player. (P2)
 
 ### Out of scope
 
@@ -84,7 +90,9 @@ No finished games yet (R3):
 
 Earned awards sort before unearned ones. `[x]` and `[ ]` stand for earned and greyed; the look is for the design step.
 
-Verified when: Micah opens his profile on production and sees his win count out of games played, his record against each person he has finished a game with, and the awards he has earned. (operator checks)
+### Open questions
+
+None yet.
 
 ### Decisions
 
