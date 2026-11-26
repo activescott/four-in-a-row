@@ -7,6 +7,17 @@
       "matchPackageNames": ["@playwright/test", "mcr.microsoft.com/playwright"],
       "groupName": "playwright",
       "groupSlug": "playwright"
+    },
+    {
+      "description": "Hold the postgres Docker image on 18, the version CI runs (.github/workflows/ci.yaml). Postgres 19 is not adopted yet.",
+      "matchPackageNames": ["postgres"],
+      "matchDatasources": ["docker"],
+      "allowedVersions": "<19"
+    },
+    {
+      "description": "Hold @electric-sql/pglite below 0.6.0, which embeds PostgreSQL 19 and would move the tests off the Postgres 18 held above.",
+      "matchPackageNames": ["@electric-sql/pglite"],
+      "allowedVersions": "<0.6.0"
     }
   ]
 }
