@@ -246,7 +246,7 @@ export async function listGames(db: PrismaClient, userId: string) {
  * The address the user invited to this game while it waits for them to
  * join, or null. Only the inviter is ever shown it.
  */
-export function invitedEmail(
+function invitedEmail(
   game: {
     status: GameStatus;
     playerOneId: string;
