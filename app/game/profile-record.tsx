@@ -3,7 +3,9 @@ import { Wrappable } from "./wrappable";
 import type { Award } from "./awards";
 import type { Totals, HeadToHead } from "./record.server";
 
-export type DisplayAward = Omit<Award, "earnedAt"> & { earnedAt: string | null };
+export type DisplayAward = Omit<Award, "earnedAt"> & {
+  earnedAt: string | null;
+};
 
 const CARD = "rounded-lg border border-slate-300 bg-white p-4";
 const date = (value: Date | string) =>
