@@ -100,3 +100,13 @@ test("keeps rematch's date when later games are against others", () => {
     awards(games, userId).find((award) => award.id === "rematch"),
   ).toMatchObject({ earned: true, earnedAt: date(5) });
 });
+
+test("sorts an award earned with no date before dated ones", () => {
+  const ids = awards(
+    [{ ...game(1, "DRAW"), finishedAt: null }, game(2, "WON")],
+    userId,
+  )
+    .filter((award) => award.earned)
+    .map((award) => award.id);
+  expect(ids).toEqual(["full-board", "first-win"]);
+});
