@@ -5,7 +5,7 @@ import {
   type BrowserContext,
   type Page,
 } from "@playwright/test";
-import { signIn } from "./helpers";
+import { hydrationErrors, signIn } from "./helpers";
 
 // One sign-in per project: the per-IP send limit is shared with the other
 // specs, so the tests reuse this session in contexts of their own.
@@ -98,4 +98,22 @@ test("in dark mode the profile page still has a light background", async ({
     return 255; // the canvas, which `color-scheme: light` keeps white
   });
   expect(lightness).toBeGreaterThan(200);
+});
+
+test("a player with no finished games sees an empty record on /profile", async ({
+  browser,
+}, testInfo) => {
+  const page = await signedInPage(browser, testInfo.project.use);
+  const errors = hydrationErrors(page);
+  await page.goto("/profile");
+  await expect(page.getByText("No finished games yet")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Against each person" }),
+  ).toHaveCount(0);
+  await expect(page.getByText("Not earned yet")).toHaveCount(6);
+  expect(errors).toEqual([]);
+  await testInfo.attach("profile-no-games", {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: "image/png",
+  });
 });
