@@ -637,6 +637,80 @@ test("/e2e/captured-email needs the shared secret even in test mode", async () =
   expect(response.status).toBe(404);
 });
 
+async function profileData(jar: CookieJar) {
+  return (await run(
+    profile.loader,
+    get("/profile", { cookie: jar.header() }),
+  )) as Exclude<Awaited<ReturnType<typeof profile.loader>>, Response>;
+}
+
+test("the profile counts games made before the first load and since", async () => {
+  const a = await db.user.create({
+    data: { email: "rec-ann@example.com", approvedAt: new Date() },
+  });
+  const b = await db.user.create({
+    data: { email: "rec-bo@example.com", approvedAt: new Date() },
+  });
+  const finished = (winnerId: string | null) => ({
+    playerOneId: a.id,
+    playerTwoId: b.id,
+    status: winnerId ? ("WON" as const) : ("DRAW" as const),
+    winnerId,
+    finishedAt: new Date(),
+  });
+  await db.game.createMany({ data: [finished(a.id), finished(null)] });
+  const { jar } = await signIn(a.email);
+
+  const first = await profileData(jar);
+  expect(first.record.totals).toEqual({
+    played: 2,
+    won: 1,
+    lost: 0,
+    drawn: 1,
+  });
+
+  await db.game.create({ data: finished(b.id) });
+  const second = await profileData(jar);
+  expect(second.record.totals).toEqual({
+    played: 3,
+    won: 1,
+    lost: 1,
+    drawn: 1,
+  });
+  expect(second.record.opponents).toEqual([
+    { name: "rec-bo", won: 1, lost: 1, drawn: 1 },
+  ]);
+
+  const json = JSON.stringify(second);
+  expect(json).not.toContain(a.id);
+  expect(json).not.toContain(b.id);
+  expect(json).not.toContain(b.email);
+});
+
+test("a profile shows nothing from other players' games", async () => {
+  const [a, b] = await Promise.all(
+    ["rec-cat@example.com", "rec-dee@example.com"].map((email) =>
+      db.user.create({ data: { email, approvedAt: new Date() } }),
+    ),
+  );
+  await db.game.create({
+    data: {
+      playerOneId: a.id,
+      playerTwoId: b.id,
+      status: "WON",
+      winnerId: a.id,
+      finishedAt: new Date(),
+    },
+  });
+  const { jar } = await signIn(await member("rec-eve@example.com"));
+
+  const data = await profileData(jar);
+  expect(data.record.totals).toEqual({ played: 0, won: 0, lost: 0, drawn: 0 });
+  expect(data.record.opponents).toEqual([]);
+  expect(data.record.awards.every((award) => !award.earned)).toBe(true);
+  expect(JSON.stringify(data)).not.toMatch(/rec-(cat|dee)/);
+});
+
 test("no log line carries an email address", () => {
   expect(capture.lines.length).toBeGreaterThan(0);
   expect(JSON.stringify(capture.lines)).not.toMatch(/@example\.com/);
