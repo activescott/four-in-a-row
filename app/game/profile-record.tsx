@@ -1,6 +1,6 @@
 import { drawsLabel } from "./display";
 import { Wrappable } from "./wrappable";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import type { Award } from "./awards";
 import type { Totals, HeadToHead } from "./record.server";
 
@@ -9,26 +9,21 @@ export type DisplayAward = Omit<Award, "earnedAt"> & {
 };
 
 const CARD = "rounded-lg border border-slate-300 bg-white p-4";
-export const date = (value: Date | string, timeZone?: string) =>
+export const date = (value: Date | string) =>
   new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",
-    timeZone,
   }).format(new Date(value));
 
+const subscribe = () => () => {};
+
 function LocalDate({ value }: { value: string }) {
-  const [formatted, setFormatted] = useState<string>();
-
-  useEffect(() => {
-    const id = setTimeout(() => {
-      setFormatted(
-        date(value, Intl.DateTimeFormat().resolvedOptions().timeZone),
-      );
-    });
-    return () => clearTimeout(id);
-  }, [value]);
-
+  const formatted = useSyncExternalStore(
+    subscribe,
+    () => date(value),
+    () => null,
+  );
   return <time dateTime={value}>{formatted}</time>;
 }
 
