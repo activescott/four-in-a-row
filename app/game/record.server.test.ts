@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { tally } from "./record.server";
+import { byOpponent, tally, totals } from "./record.server";
 
 type G = Parameters<typeof tally>[0][number];
 const me = "me";
@@ -66,4 +66,37 @@ test("keeps each opponent's record apart and skips games you are not in", () => 
 
 test("an opponent you have no finished game with has no record", () => {
   expect(tally([], me).get("jo")).toBeUndefined();
+});
+
+test("totals sums every opponent's record", () => {
+  expect(
+    totals(
+      new Map([
+        ["jo", { won: 2, lost: 1, drawn: 1 }],
+        ["cy", { won: 0, lost: 2, drawn: 1 }],
+      ]),
+    ),
+  ).toEqual({ played: 7, won: 2, lost: 3, drawn: 2 });
+});
+
+test("byOpponent sorts by games played then display name and handles clashes", () => {
+  expect(
+    byOpponent(
+      new Map([
+        ["jo", { won: 2, lost: 1, drawn: 0 }],
+        ["cy", { won: 1, lost: 1, drawn: 1 }],
+        ["di", { won: 1, lost: 0, drawn: 0 }],
+      ]),
+      new Map([
+        ["jo", "bob@a.com"],
+        ["cy", "bob@b.com"],
+        ["di", "Alice@example.com"],
+      ]),
+      ["bob@a.com", "bob@b.com", "Alice@example.com"],
+    ),
+  ).toEqual([
+    { name: "bob@a.com", won: 2, lost: 1, drawn: 0 },
+    { name: "bob@b.com", won: 1, lost: 1, drawn: 1 },
+    { name: "Alice", won: 1, lost: 0, drawn: 0 },
+  ]);
 });
