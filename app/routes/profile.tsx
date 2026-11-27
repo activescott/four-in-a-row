@@ -68,7 +68,7 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
           <span aria-hidden="true">←</span> Your games
         </Link>
       </nav>
-      <h1 className="text-2xl font-semibold">Profile</h1>
+      <h1 className={`${LIGHT.container} text-2xl font-semibold`}>Profile</h1>
       <RecordCard totals={loaderData.record.totals} />
       {loaderData.record.totals.played > 0 && (
         <OpponentsCard opponents={loaderData.record.opponents} />

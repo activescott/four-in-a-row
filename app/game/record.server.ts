@@ -88,11 +88,13 @@ export async function profileRecord(db: PrismaClient, userId: string) {
     .filter((id): id is string => id !== null);
   const users = await db.user.findMany({ where: { id: { in: opponentIds } } });
   const emails = new Map(users.map((user) => [user.id, user.email]));
-  const others = games.map((game) =>
-    game.playerOneId === userId
-      ? (emails.get(game.playerTwoId ?? "") ?? game.invite?.email ?? null)
-      : emails.get(game.playerOneId),
-  );
+  const others = games.map((game) => {
+    const email =
+      game.playerOneId === userId
+        ? (emails.get(game.playerTwoId ?? "") ?? game.invite?.email ?? null)
+        : (emails.get(game.playerOneId) ?? null);
+    return email;
+  });
   const records = tally(games, userId);
   return {
     totals: totals(records),
