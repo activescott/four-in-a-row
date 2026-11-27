@@ -9,11 +9,11 @@ A browser game of four-in-a-row for two players. It runs in Safari on iPhone and
 
 ```sh
 npm ci
-npx prisma generate   # writes the Prisma client to app/generated/
+npm run prisma -- generate   # writes the Prisma client to app/generated/
 # Run other Prisma commands as `npm run prisma -- <args>`: it works from any
 # subdirectory and keeps the CLI from calling checkpoint.prisma.io. A bare
 # `prisma` run outside the repo root skips prisma.config.mts and does call it.
-npm run dev           # PGlite database in ./pglite-data, migrated at startup
+npm run dev                  # PGlite database in ./pglite-data, migrated at startup
 npm test              # each test file gets a fresh in-memory PGlite database
 ```
 
@@ -63,6 +63,10 @@ Over a limit, nothing is sent and the form gives the same answer as for a sent e
 ## Invites
 
 "New game" emails the other player a link to `/invite/:token`. The token is random, works once, expires after 7 days and is tied to the game and the inviter. It is not a sign-in credential: the invite page starts the normal email sign-in for the invited address in the invitee's own browser, showing the address only masked, which returns to `/invite/:gameId` and seats them. Each player can have at most 5 invites pending, one per address, and the response never says whether the address already has an account. If the relay times out but delivers the email anyway, the app has already deleted the game, so the link shows not found; that is accepted, and the invitee can be invited again. After each move, the player whose turn it is gets a "your turn" email unless they have the board open.
+
+## Environment variables
+
+The app reads these variables.
 
 | Variable                                                          | Purpose                                                                                    |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
