@@ -79,3 +79,15 @@ export async function signIn(
     }
   }
 }
+
+// Collects React's hydration errors, which production builds report as
+// minified errors 418, 423 and 425.
+export function hydrationErrors(page: Page) {
+  const errors: string[] = [];
+  const check = (text: string) => {
+    if (/hydrat|#418|#423|#425/i.test(text)) errors.push(text);
+  };
+  page.on("console", (message) => check(message.text()));
+  page.on("pageerror", (error) => check(String(error)));
+  return errors;
+}

@@ -200,11 +200,11 @@ Unit tests run in Vitest with a fresh PGlite database per file, as today.
 
 `games.tsx` and `games.$id.tsx` don't change, so their score-line tests in `ui.test.tsx` stay as they are.
 
-e2e, added to `e2e/full-game.spec.mts` after its game ends in a win: the winner opens `/profile` and sees "1 win out of 1 game", one row "You 1 · {loser} 0", First win earned with today's date, and Ten wins "1 of 10". The expected date is formatted in the test with the page's zone, `Intl.DateTimeFormat("en-GB", { timeZone: "America/Los_Angeles", day: "numeric", month: "short", year: "numeric" })`, so it matches whatever the CI clock's own zone is; the loser sees "0 wins out of 1 game" and First win greyed. This runs in mobile WebKit, desktop Chromium and desktop Firefox, as today. The existing dark-mode check in `e2e/nav.spec.mts` covers the new cards' light background.
+e2e, added to `e2e/full-game.spec.mts` after its game ends in a win: the winner opens `/profile` and sees "1 win out of 1 game", one row "You 1 · {loser} 0", First win earned, and Ten wins "1 of 10". The winner opens it twice, in browser contexts with `timezoneId` set to `America/Los_Angeles` and to `UTC`; each time the expected date is the `<time>` element's `datetime` formatted in that context's zone, so the check holds at any hour of the CI clock. The loser sees "0 wins out of 1 game" and First win greyed. A console listener fails the test on a hydration error. `e2e/nav.spec.mts` opens a fresh user's `/profile`: "No finished games yet" and all six awards unearned. Each step attaches a full-page screenshot to the Playwright report. This runs in mobile WebKit, desktop Chromium and desktop Firefox, as today. The existing dark-mode check in `e2e/nav.spec.mts` covers the new cards' light background.
 
 ## Risks and open questions
 
-1. **Which day an award's date shows.** The server renders the page, and `finishedAt` is UTC: a game won at 8 pm in California on 14 Nov is 15 Nov in UTC. Formatting in the browser's own zone would differ between the server render and hydration. Recommended: format on the server in one fixed zone, `America/Los_Angeles`, since the one time in the family's issues, in #87 ("22:48 PST"), is Pacific. Scott to confirm. Another fixed zone changes only that constant. Every player seeing their own zone is a larger change: a time-zone cookie the server reads, or a date rendered only on the client.
+1. **Which day an award's date shows.** Award dates are sent as UTC ISO strings and formatted after mount in a `<time>` element with the player's own time zone. The server and initial client render contain the same ISO-backed empty `<time>`, so local formatting does not cause a hydration mismatch.
 
 No other open questions.
 

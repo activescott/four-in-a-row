@@ -1,8 +1,20 @@
-import { ProfilePage } from "@activescott/auth-adapter-react-router/profile";
+import {
+  AccountSummary,
+  Passkeys,
+  SignInMethods,
+} from "@activescott/auth-adapter-react-router/profile";
 import { Link, useRevalidator } from "react-router";
 import { profileAuthLoader, requireAuth } from "../auth.server";
+import { getDb } from "../db.server";
 import { passkeys } from "../passkey.client";
 import { CONTROL_BORDER } from "../controls";
+import { profileRecord } from "../game/record.server";
+import {
+  AwardsCard,
+  OpponentsCard,
+  RecordCard,
+  type DisplayAward,
+} from "../game/profile-record";
 import type { Route } from "./+types/profile";
 
 export function meta() {
@@ -11,9 +23,17 @@ export function meta() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const user = await requireAuth(request);
+  const record = await profileRecord(await getDb(), user.id);
   return {
     email: user.email,
     memberSince: user.createdAt,
+    record: {
+      ...record,
+      awards: record.awards.map((award): DisplayAward => ({
+        ...award,
+        earnedAt: award.earnedAt?.toISOString() ?? null,
+      })),
+    },
     ...(await profileAuthLoader(user.id, request)),
   };
 }
@@ -60,14 +80,33 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
           <span aria-hidden="true">←</span> Your games
         </Link>
       </nav>
-      <ProfilePage
-        {...loaderData}
-        passkeyClient={passkeys}
-        onPasskeyRegistered={revalidator.revalidate}
-        allowRemove
-        linkComponent={Link}
-        classNames={LIGHT}
-      />
+      <h1 className={`${LIGHT.container} text-2xl font-semibold`}>Profile</h1>
+      <RecordCard totals={loaderData.record.totals} />
+      {loaderData.record.totals.played > 0 && (
+        <OpponentsCard opponents={loaderData.record.opponents} />
+      )}
+      <AwardsCard awards={loaderData.record.awards} />
+      <div className={LIGHT.container}>
+        <AccountSummary
+          email={loaderData.email}
+          memberSince={loaderData.memberSince}
+          classNames={LIGHT}
+        />
+        <SignInMethods
+          {...loaderData}
+          allowRemove
+          linkComponent={Link}
+          classNames={LIGHT}
+        />
+        <Passkeys
+          {...loaderData}
+          client={passkeys}
+          onRegistered={revalidator.revalidate}
+          allowRemove
+          linkComponent={Link}
+          classNames={LIGHT}
+        />
+      </div>
     </main>
   );
 }

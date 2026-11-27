@@ -7,6 +7,7 @@ import Board from "./games.$id";
 import Games from "./games";
 import Invite from "./invite.$key";
 import Login from "./login";
+import Profile from "./profile";
 import { signInEmail } from "../mail/templates";
 
 // Renders a route component the way React Router would with this loader data.
@@ -559,4 +560,48 @@ test("the board record keeps a single draw together", () => {
   );
   expect(html).toContain("You 2 · bob 3 · 1\u00a0draw");
   expect(html).not.toContain("1 draw");
+});
+
+test("the profile renders the record, opponents and awards cards", () => {
+  const html = text(
+    render("/profile", Profile, {
+      email: "alice@example.com",
+      memberSince: "2026-01-01T00:00:00.000Z",
+      identities: [],
+      passkeys: [],
+      linkFlow: { status: "idle" },
+      removal: { status: "idle" },
+      record: {
+        totals: { played: 20, won: 12, lost: 7, drawn: 1 },
+        opponents: [
+          { name: "jonah", won: 3, lost: 2, drawn: 1 },
+          { name: "cy", won: 1, lost: 0, drawn: 0 },
+        ],
+        awards: [
+          {
+            id: "first-win",
+            name: "First win",
+            howTo: "Win a game",
+            earned: true,
+            earnedAt: "2026-11-14T12:00:00.000Z",
+            progress: null,
+          },
+          {
+            id: "ten-wins",
+            name: "Ten wins",
+            howTo: "Win 10 games",
+            earned: false,
+            earnedAt: null,
+            progress: { have: 6, need: 10 },
+          },
+        ],
+      },
+    }),
+  );
+  expect(html).toContain("12 wins out of 20 games");
+  expect(html).toContain("7 lost · 1\u00a0draw");
+  expect(html).toContain("You 3 · jonah 2 · 1\u00a0draw");
+  expect(html).toContain("You 1 · cy 0");
+  expect(html.indexOf("Profile")).toBeLessThan(html.indexOf("Your record"));
+  expect(html.indexOf("Your record")).toBeLessThan(html.indexOf("Account"));
 });

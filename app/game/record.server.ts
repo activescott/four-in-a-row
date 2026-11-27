@@ -1,7 +1,10 @@
 import type { GameStatus, PrismaClient } from "../generated/prisma/client";
+import { awards } from "./awards";
+import { displayName } from "./display";
 
 /** A player's finished games against one opponent, from their side. */
 export type HeadToHead = { won: number; lost: number; drawn: number };
+export type Totals = HeadToHead & { played: number };
 
 type Finished = {
   playerOneId: string;
@@ -33,6 +36,71 @@ export function tally(games: readonly Finished[], userId: string) {
     records.set(opponentId, record);
   }
   return records;
+}
+
+export function totals(records: ReadonlyMap<string, HeadToHead>): Totals {
+  const result = { played: 0, won: 0, lost: 0, drawn: 0 };
+  for (const record of records.values()) {
+    result.won += record.won;
+    result.lost += record.lost;
+    result.drawn += record.drawn;
+  }
+  result.played = result.won + result.lost + result.drawn;
+  return result;
+}
+
+export function byOpponent(
+  records: ReadonlyMap<string, HeadToHead>,
+  emails: ReadonlyMap<string, string>,
+  others: readonly (string | null)[],
+) {
+  const collator = new Intl.Collator("en", { sensitivity: "base" });
+  return [...records.entries()]
+    .map(([id, record]) => ({
+      name: displayName(emails.get(id) ?? null, others),
+      ...record,
+    }))
+    .sort(
+      (a, b) =>
+        b.won + b.lost + b.drawn - (a.won + a.lost + a.drawn) ||
+        collator.compare(a.name, b.name),
+    );
+}
+
+export async function profileRecord(db: PrismaClient, userId: string) {
+  const games = await db.game.findMany({
+    where: { OR: [{ playerOneId: userId }, { playerTwoId: userId }] },
+    select: {
+      id: true,
+      playerOneId: true,
+      playerTwoId: true,
+      status: true,
+      winnerId: true,
+      finishedAt: true,
+      invite: { select: { email: true } },
+    },
+    orderBy: [{ finishedAt: { sort: "asc", nulls: "first" } }, { id: "asc" }],
+  });
+  const opponentIds = games
+    .map((game) =>
+      game.playerOneId === userId ? game.playerTwoId : game.playerOneId,
+    )
+    .filter((id): id is string => id !== null);
+  const users = await db.user.findMany({ where: { id: { in: opponentIds } } });
+  const emails = new Map(users.map((user) => [user.id, user.email]));
+  const others = games.map((game) => {
+    const email =
+      game.playerOneId === userId
+        ? (emails.get(game.playerTwoId ?? "") ?? game.invite?.email ?? null)
+        : (emails.get(game.playerOneId) ?? null);
+    return email;
+  });
+  const records = tally(games, userId);
+  return {
+    totals: totals(records),
+    opponents: byOpponent(records, emails, others),
+    awards: awards(games, userId),
+  };
 }
 
 /** tally for the user's finished games in the database. Only theirs are read. */

@@ -1,5 +1,10 @@
-import { expect, test, type Page } from "@playwright/test";
-import { confirmSignIn, newLink, waitOutFormToken } from "./helpers";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import {
+  confirmSignIn,
+  hydrationErrors,
+  newLink,
+  waitOutFormToken,
+} from "./helpers";
 import { inviteeEmail, inviterEmail } from "./players";
 
 test("a signed-out visitor reaches the sign-in form from the home page", async ({
@@ -125,5 +130,61 @@ test("A invites B by email and they play to a win, live on both boards", async (
       await page.evaluate(() => (window as { e2eLoaded?: boolean }).e2eLoaded),
     ).toBe(true);
   }
+
+  // Each player's profile, in two zones for the winner: the award date is
+  // the viewer's local day, and the server render must still hydrate.
+  const profile = async (
+    storageState: BrowserContext["storageState"],
+    timezoneId: string,
+  ) => {
+    const context = await browser.newContext({
+      ...testInfo.project.use,
+      storageState: await storageState(),
+      timezoneId,
+    });
+    const page = await context.newPage();
+    const errors = hydrationErrors(page);
+    await page.goto("/profile");
+    return { page, errors, context };
+  };
+  const localDay = (iso: string, timeZone: string) =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(iso));
+  const award = (page: Page, name: string) =>
+    page.getByRole("listitem").filter({ hasText: name });
+
+  for (const timezoneId of ["America/Los_Angeles", "UTC"]) {
+    const { page, errors, context } = await profile(
+      () => a.context().storageState(),
+      timezoneId,
+    );
+    await expect(page.getByText("1 win out of 1 game")).toBeVisible();
+    await expect(page.getByText(`You 1 · ${name(emailB)} 0`)).toBeVisible();
+    const earned = award(page, "First win").locator("time");
+    const iso = (await earned.getAttribute("datetime"))!;
+    await expect(earned).toHaveText(localDay(iso, timezoneId));
+    await expect(award(page, "Ten wins")).toContainText("1 of 10");
+    expect(errors).toEqual([]);
+    await testInfo.attach(`profile-with-games-${timezoneId}`, {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
+    await context.close();
+  }
+
+  const loser = await profile(() => contextB.storageState(), "UTC");
+  await expect(loser.page.getByText("0 wins out of 1 game")).toBeVisible();
+  await expect(award(loser.page, "First win")).toContainText("Not earned yet");
+  await expect(award(loser.page, "First win")).toContainText("Win a game");
+  expect(loser.errors).toEqual([]);
+  await testInfo.attach("profile-lost-game", {
+    body: await loser.page.screenshot({ fullPage: true }),
+    contentType: "image/png",
+  });
+  await loser.context.close();
   await contextB.close();
 });
