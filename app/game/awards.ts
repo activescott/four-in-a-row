@@ -1,5 +1,7 @@
 import type { GameStatus } from "../generated/prisma/client";
 
+export const AWARD_TIME_ZONE = "America/Los_Angeles";
+
 type Game = {
   id: string;
   playerOneId: string;
