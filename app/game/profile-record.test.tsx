@@ -25,9 +25,13 @@ test("formats award dates in the player's time zone", () => {
   vi.stubGlobal("Intl", { ...Intl, DateTimeFormat: dateTimeFormat });
 
   process.env.TEST_TIME_ZONE = "America/Los_Angeles";
-  expect(renderToStaticMarkup(<AwardsCard awards={[award]} />)).toContain("1 Jan 2026");
+  expect(renderToStaticMarkup(<AwardsCard awards={[award]} />)).toContain(
+    "1 Jan 2026",
+  );
   process.env.TEST_TIME_ZONE = "UTC";
-  expect(renderToStaticMarkup(<AwardsCard awards={[award]} />)).toContain("2 Jan 2026");
+  expect(renderToStaticMarkup(<AwardsCard awards={[award]} />)).toContain(
+    "2 Jan 2026",
+  );
 
   vi.unstubAllGlobals();
 });
