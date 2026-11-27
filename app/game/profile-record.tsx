@@ -1,5 +1,6 @@
 import { drawsLabel } from "./display";
 import { Wrappable } from "./wrappable";
+import { useEffect, useState } from "react";
 import type { Award } from "./awards";
 import type { Totals, HeadToHead } from "./record.server";
 
@@ -8,12 +9,28 @@ export type DisplayAward = Omit<Award, "earnedAt"> & {
 };
 
 const CARD = "rounded-lg border border-slate-300 bg-white p-4";
-const date = (value: Date | string) =>
+export const date = (value: Date | string, timeZone?: string) =>
   new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone,
   }).format(new Date(value));
+
+function LocalDate({ value }: { value: string }) {
+  const [formatted, setFormatted] = useState<string>();
+
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setFormatted(
+        date(value, Intl.DateTimeFormat().resolvedOptions().timeZone),
+      );
+    });
+    return () => clearTimeout(id);
+  }, [value]);
+
+  return <time dateTime={value}>{formatted}</time>;
+}
 
 export function RecordCard({ totals }: { totals: Totals }) {
   return (
@@ -71,7 +88,7 @@ export function AwardsCard({ awards }: { awards: DisplayAward[] }) {
             </span>{" "}
             {award.name}{" "}
             {award.earned
-              ? award.earnedAt && date(award.earnedAt)
+              ? award.earnedAt && <LocalDate value={award.earnedAt} />
               : `${award.howTo}${award.progress ? ` · ${award.progress.have} of ${award.progress.need}` : ""}`}
           </li>
         ))}

@@ -204,7 +204,7 @@ e2e, added to `e2e/full-game.spec.mts` after its game ends in a win: the winner 
 
 ## Risks and open questions
 
-1. **Which day an award's date shows.** Award dates are sent as UTC ISO strings and formatted in the browser with the player's own time zone. This means the server render may differ from hydration when the server cannot know the browser zone, but each player sees the local calendar date.
+1. **Which day an award's date shows.** Award dates are sent as UTC ISO strings and formatted after mount in a `<time>` element with the player's own time zone. The server and initial client render contain the same ISO-backed empty `<time>`, so local formatting does not cause a hydration mismatch.
 
 No other open questions.
 
