@@ -38,14 +38,16 @@ export function awards(games: readonly Game[], userId: string): Award[] {
     const won = game.status === "WON" && game.winnerId === userId;
     const opponent =
       game.playerOneId === userId ? game.playerTwoId : game.playerOneId;
-    if (opponent) opponents.set(opponent, (opponents.get(opponent) ?? 0) + 1);
+    const against = opponent ? (opponents.get(opponent) ?? 0) + 1 : 0;
+    if (opponent) opponents.set(opponent, against);
     if (won) {
       wins++;
       run++;
       bestRun = Math.max(bestRun, run);
       if (wins === 1) earned.set("first-win", game.finishedAt);
       if (wins === 10) earned.set("ten-wins", game.finishedAt);
-      if (run === 3) earned.set("hat-trick", game.finishedAt);
+      if (run === 3 && !earned.has("hat-trick"))
+        earned.set("hat-trick", game.finishedAt);
     } else {
       run = 0;
       if (game.status === "DRAW") {
@@ -54,7 +56,7 @@ export function awards(games: readonly Game[], userId: string): Award[] {
       }
     }
     if (played === 25) earned.set("regular", game.finishedAt);
-    if ([...opponents.values()].some((count) => count === 5))
+    if (against === 5 && !earned.has("rematch"))
       earned.set("rematch", game.finishedAt);
   }
   const definitions: Award[] = [
