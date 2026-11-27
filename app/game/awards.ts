@@ -122,7 +122,7 @@ export function awards(games: readonly Game[], userId: string): Award[] {
     .sort(
       (a, b) =>
         Number(b.earned) - Number(a.earned) ||
-        (a.earnedAt?.getTime() ?? Infinity) -
-          (b.earnedAt?.getTime() ?? Infinity),
+        (a.earnedAt?.getTime() ?? -Infinity) -
+          (b.earnedAt?.getTime() ?? -Infinity),
     );
 }

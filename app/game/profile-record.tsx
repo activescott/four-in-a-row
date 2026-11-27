@@ -16,6 +16,13 @@ export const date = (value: Date | string) =>
     year: "numeric",
   }).format(new Date(value));
 
+const progress = ({ id, progress }: DisplayAward) => {
+  const { have, need } = progress!;
+  if (id === "hat-trick") return `best run ${have} of ${need}`;
+  if (id === "regular") return `${have} of ${need} games`;
+  return `${have} of ${need}`;
+};
+
 const subscribe = () => () => {};
 
 function LocalDate({ value }: { value: string }) {
@@ -84,7 +91,7 @@ export function AwardsCard({ awards }: { awards: DisplayAward[] }) {
             {award.name}{" "}
             {award.earned
               ? award.earnedAt && <LocalDate value={award.earnedAt} />
-              : `${award.howTo}${award.progress ? ` · ${award.progress.have} of ${award.progress.need}` : ""}`}
+              : `${award.howTo}${award.progress ? ` · ${progress(award)}` : ""}`}
           </li>
         ))}
       </ul>
