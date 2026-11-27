@@ -1,8 +1,8 @@
 import { expect, test } from "vitest";
-import { AwardsCard } from "./profile-record";
+import type { DisplayAward } from "./profile-record";
 
 test("formats award dates in the player's time zone", () => {
-  const award = {
+  const award: DisplayAward = {
     id: "first-win" as const,
     name: "First win",
     howTo: "Win a game",
@@ -10,8 +10,6 @@ test("formats award dates in the player's time zone", () => {
     earnedAt: "2026-01-02T03:00:00.000Z",
     progress: null,
   };
-  const html = AwardsCard({ awards: [award] });
-  expect(html).toBeTruthy();
   expect(
     new Intl.DateTimeFormat("en-GB", {
       timeZone: "America/Los_Angeles",

@@ -204,7 +204,7 @@ e2e, added to `e2e/full-game.spec.mts` after its game ends in a win: the winner 
 
 ## Risks and open questions
 
-1. **Which day an award's date shows.** The server renders the page, and `finishedAt` is UTC: a game won at 8 pm in California on 14 Nov is 15 Nov in UTC. Formatting in the browser's own zone would differ between the server render and hydration. Recommended: format on the server in one fixed zone, `America/Los_Angeles`, since the one time in the family's issues, in #87 ("22:48 PST"), is Pacific. Scott to confirm. Another fixed zone changes only that constant. Every player seeing their own zone is a larger change: a time-zone cookie the server reads, or a date rendered only on the client.
+1. **Which day an award's date shows.** Award dates are sent as UTC ISO strings and formatted in the browser with the player's own time zone. This means the server render may differ from hydration when the server cannot know the browser zone, but each player sees the local calendar date.
 
 No other open questions.
 

@@ -9,7 +9,12 @@ import { getDb } from "../db.server";
 import { passkeys } from "../passkey.client";
 import { CONTROL_BORDER } from "../controls";
 import { profileRecord } from "../game/record.server";
-import { AwardsCard, OpponentsCard, RecordCard } from "../game/profile-record";
+import {
+  AwardsCard,
+  OpponentsCard,
+  RecordCard,
+  type DisplayAward,
+} from "../game/profile-record";
 import type { Route } from "./+types/profile";
 
 export function meta() {
@@ -18,10 +23,17 @@ export function meta() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const user = await requireAuth(request);
+  const record = await profileRecord(await getDb(), user.id);
   return {
     email: user.email,
     memberSince: user.createdAt,
-    record: await profileRecord(await getDb(), user.id),
+    record: {
+      ...record,
+      awards: record.awards.map((award): DisplayAward => ({
+        ...award,
+        earnedAt: award.earnedAt?.toISOString() ?? null,
+      })),
+    },
     ...(await profileAuthLoader(user.id, request)),
   };
 }
