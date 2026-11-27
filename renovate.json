@@ -7,6 +7,17 @@
       "matchPackageNames": ["@playwright/test", "mcr.microsoft.com/playwright"],
       "groupName": "playwright",
       "groupSlug": "playwright"
+    },
+    {
+      "description": "Production runs postgres:18, so CI stays on Postgres 18 too. Remove this rule in the same change that upgrades production's Postgres.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["postgres"],
+      "allowedVersions": "<19"
+    },
+    {
+      "description": "pglite 0.6 is Postgres 19 and 0.5.x is Postgres 18, which is what production runs. Remove this rule in the same change that upgrades production's Postgres.",
+      "matchPackageNames": ["@electric-sql/pglite"],
+      "allowedVersions": "<0.6.0"
     }
   ]
 }
