@@ -79,3 +79,24 @@ test("a finished game without a date can earn an award", () => {
     earnedAt: null,
   });
 });
+
+test("keeps hat trick's date when a later run reaches three", () => {
+  const wins = (from: number) => [0, 1, 2].map((i) => game(from + i, "WON"));
+  const loss = { ...game(4, "WON"), winnerId: "jo" };
+  expect(
+    awards([...wins(1), loss, ...wins(5)], userId).find(
+      (award) => award.id === "hat-trick",
+    ),
+  ).toMatchObject({ earned: true, earnedAt: date(3) });
+});
+
+test("keeps rematch's date when later games are against others", () => {
+  const games = [
+    ...Array.from({ length: 5 }, (_, i) => game(i + 1, "WON", "jo")),
+    game(6, "WON", "sam"),
+    game(7, "DRAW", "kim"),
+  ];
+  expect(
+    awards(games, userId).find((award) => award.id === "rematch"),
+  ).toMatchObject({ earned: true, earnedAt: date(5) });
+});
