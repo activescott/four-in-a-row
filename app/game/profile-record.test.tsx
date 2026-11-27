@@ -15,13 +15,13 @@ test("formats award dates in the player's time zone", () => {
       timeZone: "America/Los_Angeles",
       day: "numeric",
       month: "long",
-    }).format(new Date(award.earnedAt)),
+    }).format(new Date(award.earnedAt!)),
   ).toBe("1 January");
   expect(
     new Intl.DateTimeFormat("en-GB", {
       timeZone: "UTC",
       day: "numeric",
       month: "long",
-    }).format(new Date(award.earnedAt)),
+    }).format(new Date(award.earnedAt!)),
   ).toBe("2 January");
 });
