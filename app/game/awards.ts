@@ -31,10 +31,12 @@ export function awards(games: readonly Game[], userId: string): Award[] {
   let draws = 0;
   let run = 0;
   let bestRun = 0;
+  let played = 0;
   const opponents = new Map<string, number>();
   const earned = new Map<Award["id"], Date | null>();
   for (const game of games) {
     if (game.status !== "WON" && game.status !== "DRAW") continue;
+    played++;
     const won = game.status === "WON" && game.winnerId === userId;
     const opponent =
       game.playerOneId === userId ? game.playerTwoId : game.playerOneId;
@@ -53,9 +55,6 @@ export function awards(games: readonly Game[], userId: string): Award[] {
         if (draws === 1) earned.set("full-board", game.finishedAt);
       }
     }
-    const played = games.filter(
-      (item) => item.status === "WON" || item.status === "DRAW",
-    ).length;
     if (played === 25) earned.set("regular", game.finishedAt);
     if ([...opponents.values()].some((count) => count === 5))
       earned.set("rematch", game.finishedAt);
@@ -100,9 +99,7 @@ export function awards(games: readonly Game[], userId: string): Award[] {
       earned: false,
       earnedAt: null,
       progress: {
-        have: games.filter(
-          (item) => item.status === "WON" || item.status === "DRAW",
-        ).length,
+        have: played,
         need: 25,
       },
     },
