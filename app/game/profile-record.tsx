@@ -1,6 +1,6 @@
 import { drawsLabel } from "./display";
 import { Wrappable } from "./wrappable";
-import { AWARD_TIME_ZONE } from "./awards";
+import { useSyncExternalStore } from "react";
 import type { Award } from "./awards";
 import type { Totals, HeadToHead } from "./record.server";
 
@@ -11,7 +11,6 @@ export type DisplayAward = Omit<Award, "earnedAt"> & {
 const CARD = "rounded-lg border border-slate-300 bg-white p-4";
 export const date = (value: Date | string) =>
   new Intl.DateTimeFormat("en-GB", {
-    timeZone: AWARD_TIME_ZONE,
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -23,6 +22,17 @@ const progress = ({ id, progress }: DisplayAward) => {
   if (id === "regular") return `${have} of ${need} games`;
   return `${have} of ${need}`;
 };
+
+const subscribe = () => () => {};
+
+function LocalDate({ value }: { value: string }) {
+  const formatted = useSyncExternalStore(
+    subscribe,
+    () => date(value),
+    () => null,
+  );
+  return <time dateTime={value}>{formatted}</time>;
+}
 
 export function RecordCard({ totals }: { totals: Totals }) {
   return (
@@ -80,9 +90,7 @@ export function AwardsCard({ awards }: { awards: DisplayAward[] }) {
             </span>{" "}
             {award.name}{" "}
             {award.earned
-              ? award.earnedAt && (
-                  <time dateTime={award.earnedAt}>{date(award.earnedAt)}</time>
-                )
+              ? award.earnedAt && <LocalDate value={award.earnedAt} />
               : `${award.howTo}${award.progress ? ` · ${progress(award)}` : ""}`}
           </li>
         ))}

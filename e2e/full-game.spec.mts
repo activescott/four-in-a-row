@@ -131,8 +131,8 @@ test("A invites B by email and they play to a win, live on both boards", async (
     ).toBe(true);
   }
 
-  // The winner's profile uses the fixed award zone, and the server render must
-  // still hydrate.
+  // Each player's profile, in two zones for the winner: the award date is
+  // the viewer's local day, and the server render must still hydrate.
   const profile = async (
     storageState: BrowserContext["storageState"],
     timezoneId: string,
@@ -166,7 +166,7 @@ test("A invites B by email and they play to a win, live on both boards", async (
     await expect(page.getByText(`You 1 · ${name(emailB)} 0`)).toBeVisible();
     const earned = award(page, "First win").locator("time");
     const iso = (await earned.getAttribute("datetime"))!;
-    await expect(earned).toHaveText(localDay(iso, "America/Los_Angeles"));
+    await expect(earned).toHaveText(localDay(iso, timezoneId));
     await expect(award(page, "Ten wins")).toContainText("1 of 10");
     expect(errors).toEqual([]);
     await testInfo.attach(`profile-with-games-${timezoneId}`, {
