@@ -1,8 +1,33 @@
-import { expect, test } from "vitest";
-import { date } from "./profile-record";
+import { afterEach, expect, test } from "vitest";
+import { renderToString } from "react-dom/server";
+import { AwardsCard, date, type DisplayAward } from "./profile-record";
 
-test("formats award dates in the player's time zone", () => {
-  const value = "2026-01-02T03:00:00.000Z";
-  expect(date(value, "America/Los_Angeles")).toBe("1 Jan 2026");
-  expect(date(value, "UTC")).toBe("2 Jan 2026");
+const zone = process.env.TZ;
+afterEach(() => {
+  if (zone === undefined) delete process.env.TZ;
+  else process.env.TZ = zone;
+});
+
+const earnedAt = "2026-01-02T03:00:00.000Z";
+const award: DisplayAward = {
+  id: "first-win",
+  name: "First win",
+  howTo: "Win a game",
+  earned: true,
+  earnedAt,
+  progress: null,
+};
+
+test.each([
+  ["America/Los_Angeles", "1 Jan 2026"],
+  ["UTC", "2 Jan 2026"],
+])("formats award dates in the viewer's zone, %s", (timeZone, expected) => {
+  process.env.TZ = timeZone;
+  expect(date(earnedAt)).toBe(expected);
+});
+
+test("renders award dates without text on the server", () => {
+  expect(renderToString(<AwardsCard awards={[award]} />)).toContain(
+    `<time dateTime="${earnedAt}"></time>`,
+  );
 });
