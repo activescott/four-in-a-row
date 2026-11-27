@@ -4,13 +4,13 @@ import type { Award } from "./awards";
 import type { Totals, HeadToHead } from "./record.server";
 
 const CARD = "rounded-lg border border-slate-300 bg-white p-4";
-const date = (value: Date) =>
+const date = (value: Date | string) =>
   new Intl.DateTimeFormat("en-GB", {
     timeZone: "America/Los_Angeles",
     day: "numeric",
     month: "short",
     year: "numeric",
-  }).format(value);
+  }).format(new Date(value));
 
 export function RecordCard({ totals }: { totals: Totals }) {
   return (
