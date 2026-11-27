@@ -103,7 +103,11 @@ test("the profile page is light, not dark", () => {
     passkeys: [],
     linkFlow: { status: "idle" },
     removal: { status: "idle" },
-    record: { totals: { played: 0, won: 0, lost: 0, drawn: 0 }, opponents: [], awards: [] },
+    record: {
+      totals: { played: 0, won: 0, lost: 0, drawn: 0 },
+      opponents: [],
+      awards: [],
+    },
   });
   expect(html).not.toMatch(/color-scheme:\s*light dark/i);
   expect(html).toContain("[color-scheme:light]");
@@ -124,7 +128,11 @@ const profileData = {
   passkeys: [],
   linkFlow: { status: "idle" },
   removal: { status: "idle" },
-  record: { totals: { played: 0, won: 0, lost: 0, drawn: 0 }, opponents: [], awards: [] },
+  record: {
+    totals: { played: 0, won: 0, lost: 0, drawn: 0 },
+    opponents: [],
+    awards: [],
+  },
 };
 
 test("each sign-in method is a stacked card at every width (the column is never wider than 28rem), with a full-width 44px Remove", () => {

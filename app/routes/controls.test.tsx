@@ -97,7 +97,11 @@ const profileData = {
   passkeys: [],
   linkFlow: { status: "idle" },
   removal: { status: "idle" },
-  record: { totals: { played: 0, won: 0, lost: 0, drawn: 0 }, opponents: [], awards: [] },
+  record: {
+    totals: { played: 0, won: 0, lost: 0, drawn: 0 },
+    opponents: [],
+    awards: [],
+  },
 };
 
 test("/login: the email field, the code field and the passkey button share the border", () => {
